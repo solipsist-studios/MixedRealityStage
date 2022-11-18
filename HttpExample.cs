@@ -15,7 +15,8 @@ namespace Solipsist.ExperienceCatalog
         [FunctionName("HttpExample")]
         public static async Task<IActionResult> Run(
             [HttpTrigger(AuthorizationLevel.Anonymous, "get", "post", Route = null)] HttpRequest req,
-            ILogger log)
+            ILogger log, 
+            [Queue("outqueue"), StorageAccount("AzureWebJobsStorage")] ICollector<string> msg)
         {
             log.LogInformation("C# HTTP trigger function processed a request.");
 
@@ -25,9 +26,17 @@ namespace Solipsist.ExperienceCatalog
             dynamic data = JsonConvert.DeserializeObject(requestBody);
             name = name ?? data?.name;
 
+            if (!string.IsNullOrEmpty(name))
+            {
+
+
+                // Add a message to the output collection.
+                msg.Add("Name passed to function: " + name);
+            }
+
             string responseMessage = string.IsNullOrEmpty(name)
-                ? "This HTTP triggered function executed successfully. Pass a name in the query string or in the request body for a personalized response."
-                : $"Hello, {name}. This HTTP triggered function executed successfully.";
+                ? "This HTTP triggered function executed successfully. Pass a name in the query string or in the request body for a personalized response.\n"
+                : $"Hello, {name}. This HTTP triggered function executed successfully.\n";
 
             return new OkObjectResult(responseMessage);
         }
