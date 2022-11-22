@@ -42,7 +42,6 @@ namespace Solipsist.ExperienceCatalog
             // Format results
             var experiences = await resultSet.ToAsyncEnumerable().ToListAsync();
             JsonResult experienceResult = new JsonResult(experiences);
-            log.LogInformation(experienceResult.ToString());
 
             return new OkObjectResult(experienceResult);
         }

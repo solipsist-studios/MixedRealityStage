@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "ExperienceCatalogCLI": {
+      "commandName": "Project",
+      "commandLineArgs": "get --owner \"jeff\" --storage-connection-string \"DefaultEndpointsProtocol=https;EndpointSuffix=core.windows.net;AccountName=solipsistexperiencecatal;AccountKey=Eu+bDrsX6T4f7Wf3Xhc8/0sKcCUBdxnUlHe32kxuVBhGCBh9KBeY66Avf6Z7pgGW62JJII2H6Puq+AStG06XFw==;BlobEndpoint=https://solipsistexperiencecatal.blob.core.windows.net/;FileEndpoint=https://solipsistexperiencecatal.file.core.windows.net/;QueueEndpoint=https://solipsistexperiencecatal.queue.core.windows.net/;TableEndpoint=https://solipsistexperiencecatal.table.core.windows.net/\" --cosmos-connection-string \"AccountEndpoint=https://experience-catalog.documents.azure.com:443/;AccountKey=vaoWNVDdcuSZ2j0jav4KlkyXu7ovfdO8QGVq8zFP2trpEhGC7FFhf3sYDM8kRaczXBv3JIOU4gWDACDbzt1Fdw==\""
+    }
+  }
+}
