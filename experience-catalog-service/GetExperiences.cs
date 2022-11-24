@@ -21,7 +21,7 @@ namespace Solipsist.ExperienceCatalog
             // Input parameters are obtained from the route
             log.LogInformation($"GetExperiences HTTP function triggered for user {ownerID}");
 
-            // Get cconnection strings
+            // Get connection strings
             string storageConnectionString = Utilities.GetBlobStorageConnectionString("ExperienceStorage");
             string cosmosConnectionString = Environment.GetEnvironmentVariable("CosmosDBConnectionString");
 
