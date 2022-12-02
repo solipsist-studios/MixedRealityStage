@@ -7,6 +7,7 @@ using Microsoft.Azure.WebJobs.Extensions.Http;
 using Microsoft.Extensions.Logging;
 using System;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 
 namespace Solipsist.ExperienceCatalog
@@ -16,7 +17,7 @@ namespace Solipsist.ExperienceCatalog
     {
         [FunctionName("AddExperience")]
         public static async Task<IActionResult> Run(
-            [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "expc")] HttpRequest req,
+            [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "expc/add")] HttpRequest req,
             ILogger log,
             [Queue("outqueue"), StorageAccount("AzureWebJobsStorage")] ICollector<string> msg)
         {
@@ -24,8 +25,10 @@ namespace Solipsist.ExperienceCatalog
 
             // Try getting parameters from query string
             // TODO: make this more robust
+            string ownerID = req.Query["ownerid"];
             string experienceName = req.Query["name"];
-            string ownerID = req.Query["ownerID"];
+            string storageConnectionString = req.Query["storageconnectionstring"];
+            string cosmosConnectionString = req.Query["cosmosconnectionstring"];
 
             // Validate inputs
             if (experienceName == null ||  ownerID == null) 
@@ -38,17 +41,18 @@ namespace Solipsist.ExperienceCatalog
             // Upload blob
             Stream myBlob = new MemoryStream();
             var file = req.Form.Files["payload"];
+            string fileExt = Path.GetExtension(file.FileName);
             myBlob = file.OpenReadStream();
 
-            // Get cconnection strings
-            string storageConnectionString = Utilities.GetBlobStorageConnectionString("ExperienceStorage");
-            string cosmosConnectionString = Environment.GetEnvironmentVariable("CosmosDBConnectionString");
-
-            return await RunLocal(log, storageConnectionString, cosmosConnectionString, experienceName, ownerID, myBlob);
+            return await RunLocal(log, storageConnectionString, cosmosConnectionString, experienceName, ownerID, myBlob, fileExt);
         }
 
-        public static async Task<IActionResult> RunLocal(ILogger log, string storageConnectionString, string cosmosConnectionString, string experienceName, string ownerID, Stream fileStream)
+        public static async Task<IActionResult> RunLocal(ILogger log, string? storageConnectionString, string? cosmosConnectionString, string experienceName, string ownerID, Stream fileStream, string extension = "")
         {
+            // Get connection strings
+            storageConnectionString = storageConnectionString ?? Utilities.GetBlobStorageConnectionString("ExperienceStorage");
+            cosmosConnectionString = cosmosConnectionString ?? Environment.GetEnvironmentVariable("CosmosDBConnectionString");
+
             // Create a random ID
             string experienceID = System.Guid.NewGuid().ToString();
 
@@ -65,7 +69,7 @@ namespace Solipsist.ExperienceCatalog
                 blobClient = storageClient.GetBlobContainerClient(ownerID);
             }
 
-            BlobClient blob = blobClient.GetBlobClient(experienceID);
+            BlobClient blob = blobClient.GetBlobClient(String.Format("{0}{1}", experienceID, extension));
             await blob.UploadAsync(fileStream);
 
             // Connect to metadata db and add this experience

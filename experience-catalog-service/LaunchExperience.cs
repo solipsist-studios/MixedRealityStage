@@ -3,70 +3,100 @@ using Azure.Core;
 using Azure.Identity;
 using Azure.ResourceManager;
 using Azure.ResourceManager.Compute;
+using Azure.ResourceManager.Compute.Models;
+using Azure.ResourceManager.EventGrid;
+//using Azure.ResourceManager.EventGrid.Models;
 using Azure.ResourceManager.Network;
 using Azure.ResourceManager.Network.Models;
 using Azure.ResourceManager.Resources;
-using System;
-using System.IO;
-using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Formatters.Internal;
+using Microsoft.Azure.Cosmos;
+using Microsoft.Azure.Management.EventGrid;
+using Microsoft.Azure.Management.EventGrid.Models;
 using Microsoft.Azure.Management.Network.Models;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.Http;
-using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
+using Microsoft.Rest;
+using System;
 using System.Collections.Generic;
-using Azure.ResourceManager.Compute.Models;
-using Microsoft.Azure.Cosmos;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Solipsist.ExperienceCatalog
 {
     public static class LaunchExperience
     {
-        static readonly string adminUsername = "jsipko";
-        static readonly string adminPassword = "solipsist4ever!";
+        static readonly string tenantId = "d5f06f52-0502-420b-8324-b77ca4aa68dd";
 
         [FunctionName("LaunchExperience")]
         public static async Task<IActionResult> Run(
-            [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "exp/launch")] HttpRequest req,
+            [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "expc/launch")] HttpRequest req,
             ILogger log)
         {
+            string storageConnectionString = req.Query["storageconnectionstring"];
+            string cosmosConnectionString = req.Query["cosmosconnectionstring"];
             string expID = req.Query["expid"];
+            string location = string.IsNullOrEmpty(req.Query["loc"]) ? "EastUS2" : req.Query["loc"];
+            AzureLocation azLocation = new AzureLocation(location);
+            string adminUsername = string.IsNullOrEmpty(req.Query["adminusername"]) ? "jsipko" : req.Query["adminusername"];
+            string adminPassword = string.IsNullOrEmpty(req.Query["adminpassword"]) ? "solipsist4ever!" : req.Query["adminpassword"];
 
             log.LogInformation($"LaunchExperience HTTP function triggered for id: {expID}");
 
-            return await RunLocal(log, expID, adminUsername, adminPassword);
+            return await RunLocal(log, azLocation, storageConnectionString, cosmosConnectionString, expID, adminUsername, adminPassword);
         }
 
-        // TODO: This function should be atomic
-        // TODO 2: These functions are doing too much and should be refactored
-        public static async Task<IActionResult> RunLocal(ILogger log, string expID, string adminUsername, string adminPassword)
+        private static async Task<IActionResult> SetExperienceCatalogState(ILogger log, Microsoft.Azure.Cosmos.Container metadataContainer, string expID, ExperienceState state)
         {
-            // Get connection strings
-            string storageConnectionString = Utilities.GetBlobStorageConnectionString("ExperienceStorage");
-            string cosmosConnectionString = Environment.GetEnvironmentVariable("CosmosDBConnectionString");
-
-            // TODO: Check the running status of an experience
-            // Connect to metadata db and query the experience metadata container
-            using CosmosClient cosmosClient = new(connectionString: cosmosConnectionString);
-            var metadataContainer = cosmosClient.GetContainer("experiences", "metadata");
-
             QueryDefinition queryDefinition = new QueryDefinition(
                 "select * from metadata m where m.id = @expID")
                 .WithParameter("@expID", expID);
             var resultSet = metadataContainer.GetItemQueryIterator<ExperienceMetadata>(queryDefinition).ToAsyncEnumerable();
             ExperienceMetadata experience = await resultSet.FirstAsync();
             if (experience == null) 
-            { 
+            {
+                log.LogError("!!!!!!!!ERROR: No experience found with ID {0}!!!!!!!!", expID);
                 return new NotFoundResult();
             }
 
             if (experience.state != ExperienceState.Stopped)
             {
+                log.LogWarning("Experience {0} could not be started from state {1}", expID, experience.state);
                 return new UnprocessableEntityResult();
             }
+
+            experience.state = state;
+            var response = await metadataContainer.UpsertItemAsync(experience);
+            return response.StatusCode == System.Net.HttpStatusCode.OK ? new OkObjectResult(experience) : new UnprocessableEntityObjectResult(experience);
+        }
+
+        // TODO: This function should be atomic
+        // TODO 2: These functions are doing too much and should be refactored
+        public static async Task<IActionResult> RunLocal(ILogger log, AzureLocation location, string? storageConnectionString, string? cosmosConnectionString, string expID, string adminUsername, string adminPassword)
+        {
+            // Connect to metadata db and query the experience metadata container
+            using CosmosClient cosmosClient = new(connectionString: cosmosConnectionString);
+            var metadataContainer = cosmosClient.GetContainer("experiences", "metadata");
+
+            IActionResult experienceResult = await SetExperienceCatalogState(log, metadataContainer, expID, ExperienceState.Starting);
+            ExperienceMetadata experience = null;
+            if (experienceResult is ObjectResult)
+            {
+                experience = ((ObjectResult)experienceResult).Value as ExperienceMetadata;
+            }
+
+            if (experience == null || experience.state != ExperienceState.Starting)
+            {
+                return new UnprocessableEntityResult();
+            }
+
+            // Get connection strings
+            storageConnectionString = storageConnectionString ?? Utilities.GetBlobStorageConnectionString("ExperienceStorage");
+            cosmosConnectionString = cosmosConnectionString ?? Environment.GetEnvironmentVariable("CosmosDBConnectionString");
 
             // Authenticate
             log.LogInformation("--------Start creating ARM client with auth token--------");
@@ -80,7 +110,7 @@ namespace Solipsist.ExperienceCatalog
             log.LogInformation("--------Start fetching Resource Group--------");
             SubscriptionResource subscription = await client.GetDefaultSubscriptionAsync();
             ResourceGroupCollection resourceGroups = subscription.GetResourceGroups();
-            var createRGJob = await resourceGroups.CreateOrUpdateAsync(WaitUntil.Completed, expID, new ResourceGroupData(AzureLocation.EastUS2));
+            var createRGJob = await resourceGroups.CreateOrUpdateAsync(WaitUntil.Completed, expID, new ResourceGroupData(location));
             ResourceGroupResource resourceGroup = createRGJob.Value;
             log.LogInformation("--------End fetching Resource Group--------");
 
@@ -94,26 +124,32 @@ namespace Solipsist.ExperienceCatalog
             }
             else
             {
-                vmResource = await CreateVirtualMachine(log, resourceGroup, vmCollection, experience.name, AzureLocation.EastUS2, adminUsername, adminPassword);
+                vmResource = await CreateVirtualMachine(log, credential, subscriptionId, expID, resourceGroup, vmCollection, experience.name, location, adminUsername, adminPassword);
+            
+                // Also create the VM monitor logic
+
+                //await CreateVMLogic(log, expID, )
             }
+
+            // TODO: Validate every resource -- probably via ARM or Bicep
 
             log.LogInformation("--------End fetching Virtual Machine--------");
             log.LogInformation("VM ID: " + vmResource.Id);
 
+            log.LogInformation("--------Start fetching Virtual Machine--------");
+
             // Start the VM and update the Experience state
             vmResource.PowerOn(WaitUntil.Started);
-            experience.state = ExperienceState.Starting;
-            await metadataContainer.UpsertItemAsync(experience);
 
             JsonResult vmResult = new JsonResult(vmResource);
 
             return new OkObjectResult(vmResult);
         }
 
-        private static async Task<VirtualMachineResource> CreateVirtualMachine(ILogger log, ResourceGroupResource resourceGroup, VirtualMachineCollection vmCollection, string vmName, AzureLocation location, string adminUsername, string adminPassword)
+        private static async Task<VirtualMachineResource> CreateVirtualMachine(ILogger log, TokenCredential credential, string subscriptionID, string expID, ResourceGroupResource resourceGroup, VirtualMachineCollection vmCollection, string vmName, AzureLocation location, string adminUsername, string adminPassword)
         {
             log.LogInformation("--------Start creating IP Address--------");
-            string ipAddressName = String.Format("{0}_ip", vmName);
+            string ipAddressName = String.Format("{0}-ip", vmName);
             PublicIPAddressData ipAddressData = new PublicIPAddressData()
             {
                 PublicIPAddressVersion = NetworkIPVersion.IPv4,
@@ -126,8 +162,8 @@ namespace Solipsist.ExperienceCatalog
             log.LogInformation("--------End creating IP Address--------");
 
             log.LogInformation("--------Start creating Virtual Network--------");
-            string vnetName = String.Format("{0}_vnet", vmName);
-            string subnetName = String.Format("{0}_subnet", vmName);
+            string vnetName = String.Format("{0}-vnet", vmName);
+            string subnetName = String.Format("{0}-subnet", vmName);
             VirtualNetworkData vnetData = new VirtualNetworkData()
             {
                 Location = location.Name,
@@ -140,7 +176,7 @@ namespace Solipsist.ExperienceCatalog
             log.LogInformation("--------End creating Virtual Network--------");
 
             log.LogInformation("--------Start creating Network Interface--------");
-            string nicName = String.Format("{0}_nic", vmName);
+            string nicName = String.Format("{0}-nic", vmName);
             NetworkInterfaceData nicData = new NetworkInterfaceData()
             {
                 Location = location,
@@ -199,7 +235,80 @@ namespace Solipsist.ExperienceCatalog
             VirtualMachineResource vm = vmJob.Value;
             log.LogInformation("--------End creating Virtual Machine--------");
 
+            log.LogInformation("--------Start creating System Topic--------");
+            string systemTopicName = String.Format("{0}-topic", expID);
+            SystemTopicData systemTopicData = new SystemTopicData("global"){
+                Source = resourceGroup.Id,
+                TopicType = "microsoft.resources.resourcegroups"
+            };
+            var systemTopicJob = await resourceGroup.GetSystemTopics().CreateOrUpdateAsync(WaitUntil.Completed, systemTopicName, systemTopicData);
+            SystemTopicResource systemTopic = systemTopicJob.Value;
+            log.LogInformation("--------End creating System Topic--------");
+
+            log.LogInformation("--------Start creating Event Grid Subscription--------");
+            string eventSubscriptionName = String.Format("{0}-event-grid-subscription", vmName);
+            TokenRequestContext trc = new TokenRequestContext(new string[] { "https://management.azure.com" }, tenantId: tenantId);
+            CancellationToken ct = new CancellationToken();
+            log.LogInformation($"Attempting to obtain Token for Service Principal using Tenant Id:{tenantId}");
+            
+            AccessToken accessToken = await credential.GetTokenAsync(trc, ct);
+            string token = accessToken.Token;
+
+            TokenCredentials tc = new TokenCredentials(token);
+            
+            EventGridManagementClient eventGridMgmtClient = new EventGridManagementClient(tc)
+            {
+                SubscriptionId = subscriptionID,
+                LongRunningOperationRetryTimeout = 2
+            };
+
+            string eventSubscriptionScope = systemTopic.Id;
+
+            log.LogInformation($"Creating an event subscription to topic {systemTopicName}...");
+
+            // EventGridSubscriptionData eventSubscriptionData = new EventGridSubscriptionData() 
+            // {
+            //     Destination = new WebHookEventSubscriptionDestination(),
+            //     EventDeliverySchema = EventDeliverySchema.EventGridSchema,
+            //     Filter = new EventSubscriptionFilter()
+            //     {
+            //         IncludedEventTypes = 
+            //         {
+            //             "Microsoft.Resources.ResourceActionSuccess",
+            //             "Microsoft.Resources.ResourceDeleteSuccess",
+            //             "Microsoft.Resources.ResourceWriteSuccess"
+            //         }
+            //     }
+            // };
+            EventSubscription eventSubscriptionData = new EventSubscription() 
+            {
+                Destination = new WebHookEventSubscriptionDestination(),
+                EventDeliverySchema = EventDeliverySchema.EventGridSchema,
+                Filter = new EventSubscriptionFilter()
+                {
+                    IncludedEventTypes = new List<string>
+                    {
+                        "Microsoft.Resources.ResourceActionSuccess",
+                        "Microsoft.Resources.ResourceDeleteSuccess",
+                        "Microsoft.Resources.ResourceWriteSuccess"
+                    }
+                }
+            };
+
+  
+            //var eventSubscriptionJob = await eventGridMgmtClient.SystemTopicEventSubscriptions.CreateOrUpdateAsync(eventSubscriptionScope, eventSubscriptionName, eventSubscriptionData);
+            EventSubscription eventSubscription = await eventGridMgmtClient.EventSubscriptions.CreateOrUpdateAsync(eventSubscriptionScope, eventSubscriptionName, eventSubscriptionData);//expID, systemTopicName, eventSubscriptionName, eventSubscriptionData);
+            //EventSubscription createdEventSubscription = 
+            log.LogInformation("--------End creating Event Grid Subscription--------");
+
             return vm;
+        }
+
+        private static async Task CreateVMLogic(ILogger log)
+        {
+            log.LogInformation("--------Start creating VM Logic--------");
+
+            log.LogInformation("--------End creating VM Logic--------");
         }
     }
 }
