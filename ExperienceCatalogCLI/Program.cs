@@ -34,34 +34,60 @@ namespace Solipsist.CLI
 
             var nameOption = new Option<string?>(
                 name: "--name",
-                description: "The name of the experience");
+                description: "The name of the experience")
+            { IsRequired = true };
 
             var ownerOption = new Option<string?>(
                 name: "--owner",
-                description: "The ID of the owner of the experience");
+                description: "The ID of the owner of the experience")
+            { IsRequired = true };
 
             var fileOption = new Option<FileInfo?>(
                 name: "--file",
-                description: "The packaged Unity linux server build as a .tar.gz");
+                description: "The packaged Unity linux server build as a .tar.gz")
+            { IsRequired = true };
+
+            var experienceOption = new Option<string?>(
+                name: "--experience-id",
+                description: "The GUID value of the experience")
+            { IsRequired = true };
+
+            var adminUsernameOption = new Option<string?>(
+                name: "--admin-username",
+                description: "The username of the VM admin account",
+                getDefaultValue: () => "solipsistadmin");
+
+            var adminPasswordOption = new Option<string?>(
+                name: "--admin-password",
+                description: "The password for the VM admin account",
+                getDefaultValue: () => "solipsist4ever!");
+
+            var locationOption = new Option<string?>(
+                name: "--location",
+                description: "The region in which to locate the resources",
+                getDefaultValue: () => "EastUS2");
             #endregion
 
-            var rootCommand = new RootCommand("Solipsist Experience Catalog CLI");
+            var rootCommand = new RootCommand("Solipsist Experience Platform CLI");
+            var catCommand = new Command("cat", "Commands relating to management of the Experience Catalog");
+            catCommand.AddGlobalOption(cosmosConnectionStringOption);
+            catCommand.AddGlobalOption(storageConnectionStringOption);
+            rootCommand.AddCommand(catCommand);
 
             #region add_command
             var addCommand = new Command("add", "Creates a new experience in the catalog")
             {
-                storageConnectionStringOption,
-                cosmosConnectionStringOption,
                 nameOption,
                 ownerOption,
                 fileOption
             };
-            rootCommand.AddCommand(addCommand);
+            catCommand.AddCommand(addCommand);
 
             addCommand.SetHandler(async (storageConnectionString, cosmosConnectionString, name, owner, file) =>
             {
                 var fileStream = file != null ? file.OpenRead() : null;
-                await AddExperience.RunLocal(logger, storageConnectionString, cosmosConnectionString, name, owner, fileStream);
+                var result = await AddExperience.RunLocal(logger, storageConnectionString, cosmosConnectionString, name, owner, fileStream);
+                logger.LogInformation(result.ToString());
             },
             storageConnectionStringOption, cosmosConnectionStringOption, nameOption, ownerOption, fileOption);
             #endregion
@@ -69,11 +95,9 @@ namespace Solipsist.CLI
             #region get_command
             var getCommand = new Command("get", "Retrieves available experiences by owner")
             {
-                storageConnectionStringOption,
-                cosmosConnectionStringOption,
                 ownerOption
             };
-            rootCommand.AddCommand(getCommand);
+            catCommand.AddCommand(getCommand);
 
             getCommand.SetHandler(async (storageConnectionString, cosmosConnectionString, owner) =>
             {
@@ -90,6 +114,24 @@ namespace Solipsist.CLI
 
             },
             storageConnectionStringOption, cosmosConnectionStringOption, ownerOption);
+            #endregion
+
+            #region launch_command
+            var launchCommand = new Command("launch", "Start running an experience from the catalog")
+            {
+                experienceOption,
+                adminUsernameOption,
+                adminPasswordOption,
+                locationOption
+            };
+            catCommand.AddCommand(launchCommand);
+
+            launchCommand.SetHandler(async (storageConnectionString, cosmosConnectionString, expID, adminUsername, adminPassword, location) =>
+            {
+                var result = await LaunchExperience.RunLocal(logger, location, storageConnectionString, cosmosConnectionString, expID, adminUsername, adminPassword);
+                logger.LogInformation(result.ToString());
+            },
+            storageConnectionStringOption, cosmosConnectionStringOption, experienceOption, adminUsernameOption, adminPasswordOption, locationOption);
             #endregion
 
             return await rootCommand.InvokeAsync(args);

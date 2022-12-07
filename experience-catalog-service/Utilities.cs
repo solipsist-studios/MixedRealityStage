@@ -22,5 +22,10 @@ namespace Solipsist.ExperienceCatalog
 
             return conStr;
         }
+
+        public static async Task GetOrCreateResource()
+        {
+
+        }
     }
 }
