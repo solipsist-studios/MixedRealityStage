@@ -9,12 +9,13 @@ using Azure.ResourceManager.EventGrid;
 using Azure.ResourceManager.Network;
 using Azure.ResourceManager.Network.Models;
 using Azure.ResourceManager.Resources;
+using Azure.ResourceManager.Resources.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Formatters.Internal;
 using Microsoft.Azure.Cosmos;
-using Microsoft.Azure.Management.EventGrid;
-using Microsoft.Azure.Management.EventGrid.Models;
+//using Microsoft.Azure.Management.EventGrid;
+//using Microsoft.Azure.Management.EventGrid.Models;
 using Microsoft.Azure.Management.Network.Models;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.Http;
@@ -23,6 +24,7 @@ using Microsoft.Rest;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -118,13 +120,14 @@ namespace Solipsist.ExperienceCatalog
             log.LogInformation("--------Start fetching Virtual Machine--------");
             VirtualMachineCollection vmCollection = resourceGroup.GetVirtualMachines();
             VirtualMachineResource vmResource = null;
+            ArmDeploymentResource deployment = null;
             if (vmCollection.Exists(experience.name))
             {
                 vmResource = await vmCollection.GetAsync(experience.name);
             }
             else
             {
-                vmResource = await CreateVirtualMachine(log, credential, subscriptionId, expID, resourceGroup, vmCollection, experience.name, location, adminUsername, adminPassword);
+                deployment = await CreateVMWithBicep(log, credential, subscriptionId, expID, resourceGroup, vmCollection, experience.name, location, adminUsername, adminPassword);
             
                 // Also create the VM monitor logic
 
@@ -141,9 +144,41 @@ namespace Solipsist.ExperienceCatalog
             // Start the VM and update the Experience state
             vmResource.PowerOn(WaitUntil.Started);
 
-            JsonResult vmResult = new JsonResult(vmResource);
+            JsonResult vmResult = new JsonResult(vmResource != null ? vmResource : deployment);
 
             return new OkObjectResult(vmResult);
+        }
+
+        private static async Task<ArmDeploymentResource> CreateVMWithBicep(ILogger log, TokenCredential credential, string ownerID, string expID, ResourceGroupResource resourceGroup, VirtualMachineCollection vmCollection, string vmName, AzureLocation location, string adminUsername, string adminPassword)
+        {
+            log.LogInformation("Start Creating VM Resources");
+
+            ArmDeploymentContent deploymentContent = new ArmDeploymentContent(new ArmDeploymentProperties(ArmDeploymentMode.Incremental)
+            {
+                Template = BinaryData.FromStream(File.Create(Path.Combine(".", "Templates", "vm-template.json"))),
+                Parameters = BinaryData.FromObjectAsJson(new
+                {
+                    ownerId = new
+                    {
+                        value = ownerID
+                    },
+                    experienceId = new
+                    {
+                        value = expID
+                    },
+                    experienceName = new
+                    {
+                        value = vmName
+                    },
+                    location = new
+                    {
+                        value = location
+                    }
+                })
+            });
+
+            var deploymentJob = await resourceGroup.GetArmDeployments().CreateOrUpdateAsync(WaitUntil.Completed, "vm-resource-deployment", deploymentContent);
+            return deploymentJob.Value;
         }
 
         private static async Task<VirtualMachineResource> CreateVirtualMachine(ILogger log, TokenCredential credential, string subscriptionID, string expID, ResourceGroupResource resourceGroup, VirtualMachineCollection vmCollection, string vmName, AzureLocation location, string adminUsername, string adminPassword)
@@ -256,11 +291,11 @@ namespace Solipsist.ExperienceCatalog
 
             TokenCredentials tc = new TokenCredentials(token);
             
-            EventGridManagementClient eventGridMgmtClient = new EventGridManagementClient(tc)
-            {
-                SubscriptionId = subscriptionID,
-                LongRunningOperationRetryTimeout = 2
-            };
+            //EventGridManagementClient eventGridMgmtClient = new EventGridManagementClient(tc)
+            //{
+            //    SubscriptionId = subscriptionID,
+            //    LongRunningOperationRetryTimeout = 2
+            //};
 
             string eventSubscriptionScope = systemTopic.Id;
 
@@ -280,24 +315,25 @@ namespace Solipsist.ExperienceCatalog
             //         }
             //     }
             // };
-            EventSubscription eventSubscriptionData = new EventSubscription() 
-            {
-                Destination = new WebHookEventSubscriptionDestination(),
-                EventDeliverySchema = EventDeliverySchema.EventGridSchema,
-                Filter = new EventSubscriptionFilter()
-                {
-                    IncludedEventTypes = new List<string>
-                    {
-                        "Microsoft.Resources.ResourceActionSuccess",
-                        "Microsoft.Resources.ResourceDeleteSuccess",
-                        "Microsoft.Resources.ResourceWriteSuccess"
-                    }
-                }
-            };
+
+            //EventSubscription eventSubscriptionData = new EventSubscription() 
+            //{
+            //    Destination = new WebHookEventSubscriptionDestination(),
+            //    EventDeliverySchema = EventDeliverySchema.EventGridSchema,
+            //    Filter = new EventSubscriptionFilter()
+            //    {
+            //        IncludedEventTypes = new List<string>
+            //        {
+            //            "Microsoft.Resources.ResourceActionSuccess",
+            //            "Microsoft.Resources.ResourceDeleteSuccess",
+            //            "Microsoft.Resources.ResourceWriteSuccess"
+            //        }
+            //    }
+            //};
 
   
             //var eventSubscriptionJob = await eventGridMgmtClient.SystemTopicEventSubscriptions.CreateOrUpdateAsync(eventSubscriptionScope, eventSubscriptionName, eventSubscriptionData);
-            EventSubscription eventSubscription = await eventGridMgmtClient.EventSubscriptions.CreateOrUpdateAsync(eventSubscriptionScope, eventSubscriptionName, eventSubscriptionData);//expID, systemTopicName, eventSubscriptionName, eventSubscriptionData);
+            //EventSubscription eventSubscription = await eventGridMgmtClient.EventSubscriptions.CreateOrUpdateAsync(eventSubscriptionScope, eventSubscriptionName, eventSubscriptionData);//expID, systemTopicName, eventSubscriptionName, eventSubscriptionData);
             //EventSubscription createdEventSubscription = 
             log.LogInformation("--------End creating Event Grid Subscription--------");
 

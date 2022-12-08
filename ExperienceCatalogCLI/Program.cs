@@ -92,16 +92,16 @@ namespace Solipsist.CLI
             storageConnectionStringOption, cosmosConnectionStringOption, nameOption, ownerOption, fileOption);
             #endregion
 
-            #region get_command
-            var getCommand = new Command("get", "Retrieves available experiences by owner")
+            #region list_command
+            var listCommand = new Command("list", "Retrieves available experiences by owner")
             {
                 ownerOption
             };
-            catCommand.AddCommand(getCommand);
+            catCommand.AddCommand(listCommand);
 
-            getCommand.SetHandler(async (storageConnectionString, cosmosConnectionString, owner) =>
+            listCommand.SetHandler(async (storageConnectionString, cosmosConnectionString, owner) =>
             {
-                OkObjectResult? result = await GetExperiences.RunLocal(logger, storageConnectionString, cosmosConnectionString, owner) as OkObjectResult;
+                OkObjectResult? result = await ListExperiences.RunLocal(logger, storageConnectionString, cosmosConnectionString, owner) as OkObjectResult;
                 if (result != null)
                 {
                     JsonResult? experiences = result.Value as JsonResult;

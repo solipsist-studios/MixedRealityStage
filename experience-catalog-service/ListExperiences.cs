@@ -10,11 +10,11 @@ using System.Threading.Tasks;
 
 namespace Solipsist.ExperienceCatalog
 {
-    public static class GetExperiences
+    public static class ListExperiences
     {
-        [FunctionName("GetExperiences")]
+        [FunctionName("ListExperiences")]
         public static async Task<IActionResult> Run(
-            [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "expc/list")] HttpRequest req,
+            [HttpTrigger(AuthorizationLevel.Anonymous, "list", Route = "expc/list")] HttpRequest req,
             ILogger log)
         {
             // Get query strings
