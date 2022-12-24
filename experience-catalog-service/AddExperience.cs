@@ -1,3 +1,5 @@
+using Azure.Core;
+using Azure.Identity;
 using Azure.Storage.Blobs;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -8,6 +10,7 @@ using Microsoft.Extensions.Logging;
 using System;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Security.Claims;
 using System.Threading.Tasks;
 
 namespace Solipsist.ExperienceCatalog
@@ -18,46 +21,57 @@ namespace Solipsist.ExperienceCatalog
         [FunctionName("AddExperience")]
         public static async Task<IActionResult> Run(
             [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "expc/add")] HttpRequest req,
-            ILogger log,
-            [Queue("outqueue"), StorageAccount("AzureWebJobsStorage")] ICollector<string> msg)
+            ILogger log)
         {
             log.LogInformation("AddExperience HTTP function triggered.");
 
+            try
+            {
+                log.LogInformation("Authenticated as user: {0}", ClaimsPrincipal.Current.Identity.Name);
+            }
+            catch (Exception ex)
+            {
+                log.LogError("Could not find user principal");
+            }
+
             // Try getting parameters from query string
             // TODO: make this more robust
-            string ownerID = req.Query["ownerid"];
             string experienceName = req.Query["name"];
-            string storageConnectionString = req.Query["storageconnectionstring"];
-            string cosmosConnectionString = req.Query["cosmosconnectionstring"];
 
             // Validate inputs
-            if (experienceName == null ||  ownerID == null) 
+            if (experienceName == null) 
             {
                 return new BadRequestResult();
             }
 
             // TODO: return a failure if an experience with the same name already exists
-                
+
+            // Connect to metadata db and query the experience metadata container
+            var credential = new DefaultAzureCredential(includeInteractiveCredentials: true);
+
+            string ownerID = await Utilities.GetCurrentUserIdentityAsync(log, credential);
+
             // Upload blob
             Stream myBlob = new MemoryStream();
             var file = req.Form.Files["payload"];
             string fileExt = Path.GetExtension(file.FileName);
             myBlob = file.OpenReadStream();
 
-            return await RunLocal(log, storageConnectionString, cosmosConnectionString, experienceName, ownerID, myBlob, fileExt);
+            return await RunLocal(log, credential, experienceName, ownerID, myBlob, fileExt);
         }
 
-        public static async Task<IActionResult> RunLocal(ILogger log, string? storageConnectionString, string? cosmosConnectionString, string experienceName, string ownerID, Stream fileStream, string extension = "")
+        public static async Task<IActionResult> RunLocal(ILogger log, TokenCredential credential, string experienceName, string ownerID, Stream fileStream, string extension = "")
         {
-            // Get connection strings
-            storageConnectionString = storageConnectionString ?? Utilities.GetBlobStorageConnectionString("ExperienceStorage");
-            cosmosConnectionString = cosmosConnectionString ?? Environment.GetEnvironmentVariable("CosmosDBConnectionString");
-
             // Create a random ID
+            // TODO: Use deterministic GUID generation
             string experienceID = System.Guid.NewGuid().ToString();
 
+            string[] scopes = new string[] { "https://graph.microsoft.com/.default" };
+            //credential.GetToken(new Azure.Core.TokenRequestContext(scopes));
+            
+
             // Set container to OwnerID
-            BlobServiceClient storageClient = new BlobServiceClient(storageConnectionString);
+            BlobServiceClient storageClient = new BlobServiceClient((await Utilities.GetKeyVaultSecretAsync("StorageConnectionString", credential)).Value);
             BlobContainerClient blobClient = null;
             try
             {
@@ -73,7 +87,7 @@ namespace Solipsist.ExperienceCatalog
             await blob.UploadAsync(fileStream);
 
             // Connect to metadata db and add this experience
-            using CosmosClient client = new(connectionString: cosmosConnectionString);
+            using CosmosClient client = new CosmosClient((await Utilities.GetKeyVaultSecretAsync("CosmosDBConnectionString", credential)).Value);
             await client.GetContainer("experiences", "metadata").CreateItemAsync(
                 new
                 {
@@ -87,6 +101,4 @@ namespace Solipsist.ExperienceCatalog
             return new CreatedResult(experienceID, responseMessage);
         }
     }
-
-    
 }

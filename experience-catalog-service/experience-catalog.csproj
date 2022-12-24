@@ -19,13 +19,16 @@
     <PackageReference Include="Azure.ResourceManager.EventGrid" Version="1.0.0" />
     <PackageReference Include="Azure.ResourceManager.Network" Version="1.1.0" />
     <PackageReference Include="Azure.ResourceManager.Resources" Version="1.3.1" />
+    <PackageReference Include="Azure.Security.KeyVault.Secrets" Version="4.5.0-beta.1" />
     <PackageReference Include="Azure.Storage.Blobs" Version="12.14.1" />
     <PackageReference Include="Microsoft.Azure.Cosmos" Version="3.31.2" />
     <PackageReference Include="Microsoft.Azure.Management.Network" Version="25.0.0" />
+    <PackageReference Include="Microsoft.Azure.Services.AppAuthentication" Version="1.6.2" />
     <PackageReference Include="Microsoft.Azure.WebJobs.Extensions.CosmosDB" Version="4.0.0" />
     <PackageReference Include="Microsoft.Azure.WebJobs.Extensions.EventGrid" Version="3.2.1" />
     <PackageReference Include="Microsoft.Azure.WebJobs.Extensions.Storage" Version="5.0.1" />
     <PackageReference Include="Microsoft.Azure.WebJobs.Extensions.Storage.Blobs" Version="5.0.1" />
+    <PackageReference Include="Microsoft.Identity.Web" Version="2.0.8-preview" />
     <PackageReference Include="Microsoft.NET.Sdk.Functions" Version="4.1.3" />
     <PackageReference Include="Microsoft.Rest.ClientRuntime" Version="2.3.24" />
     <PackageReference Include="System.Configuration.ConfigurationManager" Version="7.0.0" />
@@ -45,4 +48,7 @@
       <CopyToPublishDirectory>Never</CopyToPublishDirectory>
     </None>
   </ItemGroup>
+  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
+    <Exec Command="xcopy /i /e /s /y /f $(TargetDir)Templates $(SolutionDir)Templates" />
+  </Target>
 </Project>

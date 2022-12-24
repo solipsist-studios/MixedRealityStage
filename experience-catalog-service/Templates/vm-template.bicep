@@ -1,11 +1,12 @@
 param ownerId string
 param experienceId string
 param experienceName string
+param location string = 'eastus2'
+param vmSize string = 'Standard_B1ls'
+
 param virtualNetworkName string = '${experienceName}-vnet'
 param networkSecurityGroupName string = '${experienceName}-sg'
 param subnetName string = '${experienceName}-subnet'
-param location string = 'eastus2'
-param vmSize string = 'Standard_B1ls'
 param adminUsername string = 'solipsistadmin'
 param storageAccountName string = 'solipsistexperiencecatal'
 param storageResourceGroupName string = 'solipsistexperiencecatal'
@@ -185,7 +186,6 @@ module storageRoleAssignment './storage-role-assignment.bicep' = {
     ownerId: ownerId
     storageAccountName: storageAccountName
     principalId: virtualMachine.identity.principalId
-    //roleDefinitionId: roleDefinitionId
   }
 }
 
@@ -193,6 +193,9 @@ resource virtualMachineBootstrapScript 'Microsoft.Compute/virtualMachines/extens
   parent: virtualMachine
   name: 'provisionserver'
   location: location
+  dependsOn: [
+      storageRoleAssignment
+  ]
   properties: {
     publisher: 'Microsoft.Azure.Extensions'
     type: 'CustomScript'
@@ -201,8 +204,9 @@ resource virtualMachineBootstrapScript 'Microsoft.Compute/virtualMachines/extens
       fileUris: [
         'https://solipsistexperiencecatal.blob.core.windows.net/${ownerId}/${experienceId}'
         'https://solipsistexperiencecatal.blob.core.windows.net/experiences/launch-unity.sh'
+        'https://solipsistexperiencecatal.blob.core.windows.net/experiences/unity.service'
       ]
-      commandToExecute: '.\\launch-unity.sh ${experienceId}'
+      commandToExecute: './launch-unity.sh ${experienceId} ${experienceName}'
       managedIdentity : {}
     }
   }

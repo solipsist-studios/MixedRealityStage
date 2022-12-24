@@ -1,0 +1,10 @@
+[Unit]
+Description=User Supplied Unity Server
+
+[Service]
+ExecStart=/usr/local/bin/unity/<EXPERIENCE_NAME>.x86_64 -batchmode -nographics -mlapi server
+Restart=on-failure
+EnvironmentFile=/etc/environment
+
+[Install]
+WantedBy=multi-user.target
