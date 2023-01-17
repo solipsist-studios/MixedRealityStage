@@ -1,16 +1,13 @@
-﻿using Azure.Core;
-using Azure.Identity;
+﻿using Azure.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-//using Microsoft.Graph;
 using Microsoft.Identity.Client;
-using Microsoft.Identity.Client.Platforms.Features.DesktopOs.Kerberos;
+using Microsoft.Identity.Client.Extensions.Msal;
 using Newtonsoft.Json;
 using Solipsist.ExperienceCatalog;
 using System.CommandLine;
 using System.IdentityModel.Tokens.Jwt;
-using System.Net;
 
 namespace Solipsist.CLI
 {
@@ -18,84 +15,71 @@ namespace Solipsist.CLI
     {
         // The MSAL Public client app
         private static IPublicClientApplication? application;
+        private static PublicClientApplicationOptions? appConfiguration = null;
+        private static IConfiguration? configuration;
 
-        //private static async Task<string> SignInUserAndGetTokenUsingMSAL(PublicClientApplicationOptions configuration, string[] scopes)
-        //{
-        //    string authority = string.Concat(configuration.Instance, configuration.TenantId);
-
-        //    // Initialize the MSAL library by building a public client application
-        //    application = PublicClientApplicationBuilder.Create(configuration.ClientId)
-        //                                            .WithAuthority(authority)
-        //                                            .WithDefaultRedirectUri()
-        //                                            .Build();
-
-        //    AuthenticationResult result;
-        //    try
-        //    {
-        //        var accounts = await application.GetAccountsAsync();
-        //        result = await application.AcquireTokenSilent(scopes, accounts.FirstOrDefault())
-        //         .ExecuteAsync();
-        //    }
-        //    catch (MsalUiRequiredException ex)
-        //    {
-        //        result = await application.AcquireTokenInteractive(scopes)
-        //         .WithClaims(ex.Claims)
-        //         .ExecuteAsync();
-        //    }
-
-        //    return result.AccessToken;
-        //}
-
-        public static async Task<string> GetCurrentUserIdentityAsync(ILogger log, TokenCredential credential)
+        private static async Task<JwtSecurityToken> SignInUserAndGetTokenUsingMSALAsync(string[] scopes)
         {
-            string clientId = "bf644f2b-7148-4fde-bec1-79d5d58da4c5";
-            string resourceId = "https://solipsiststudios.onmicrosoft.com/experience-catalog";
-            //string[] scopes = new string[] { $"{resourceId}/.default" };
-            string[] scopes = new string[]
+            if (configuration == null || appConfiguration == null)
             {
-                $"{resourceId}/experiences.read",
-                $"{resourceId}/experiences.write"
-            };
+                return null;
+            }
 
-            string token = "";
+            string authority = configuration.GetValue<string>("Authority");
+
+            // Initialize the MSAL library by building a public client application
+            application = PublicClientApplicationBuilder.Create(appConfiguration.ClientId)
+                                                        .WithB2CAuthority(authority)
+                                                        .WithRedirectUri(appConfiguration.RedirectUri)
+                                                        .Build();
+
+            // Building StorageCreationProperties
+            var storageProperties =
+                 new StorageCreationPropertiesBuilder(CacheSettings.CacheFileName, CacheSettings.CacheDir)
+                 .WithLinuxKeyring(
+                     CacheSettings.LinuxKeyRingSchema,
+                     CacheSettings.LinuxKeyRingCollection,
+                     CacheSettings.LinuxKeyRingLabel,
+                     CacheSettings.LinuxKeyRingAttr1,
+                     CacheSettings.LinuxKeyRingAttr2)
+                 .WithMacKeyChain(
+                     CacheSettings.KeyChainServiceName,
+                     CacheSettings.KeyChainAccountName)
+                 .Build();
+
+            // This hooks up the cross-platform cache into MSAL
+            var cacheHelper = await MsalCacheHelper.CreateAsync(storageProperties);
+            cacheHelper.RegisterCache(application.UserTokenCache);
+
+            AuthenticationResult result;
             try
             {
-                token = credential.GetToken(new Azure.Core.TokenRequestContext(scopes), new System.Threading.CancellationToken()).Token;
+                var accounts = await application.GetAccountsAsync();
+                result = await application.AcquireTokenSilent(scopes, accounts.FirstOrDefault())
+                    .ExecuteAsync();
             }
-            catch (AuthenticationFailedException ex)
+            catch (MsalUiRequiredException ex)
             {
-                log.LogInformation("Failed to retrieve token from Default Credentials. Trying token cache...");
-
-                application = PublicClientApplicationBuilder.Create(clientId)
-                    .WithRedirectUri("http://localhost")
-                    .Build();
-
-                AuthenticationResult result;
-                try
-                {
-                    var accounts = await application.GetAccountsAsync();
-                    result = await application.AcquireTokenSilent(scopes, accounts.FirstOrDefault())
-                        .ExecuteAsync();
-                    token = result.AccessToken;
-                }
-                catch (MsalUiRequiredException ex2)
-                {
-                    log.LogInformation("Failed to retrieve token from token cache.  Please log in.");
-
-                    result = await application.AcquireTokenInteractive(scopes)
-                        .WithClaims(ex2.Claims)
-                        .ExecuteAsync();
-                    token = result.AccessToken;
-                }
+                result = await application.AcquireTokenInteractive(scopes)
+                    .WithClaims(ex.Claims)
+                    .ExecuteAsync();
             }
 
-            var handler = new JwtSecurityTokenHandler();
-            var jsonToken = handler.ReadToken(token) as JwtSecurityToken;
+            return Utilities.GetJwtFromString(result.AccessToken);
+        }
 
-            log.LogInformation("Full Token:\n{0}", jsonToken != null ? jsonToken.ToString() : "NOT FOUND");
+        static async Task LogoutAndClearCacheAsync()
+        {
+            if (application == null)
+            {
+                return;
+            }
 
-            // TODO: Validate "aud" claim matches client ID
-            return jsonToken.Claims.First(c => c.Type == "oid").Value;
+            var accounts = await application.GetAccountsAsync().ConfigureAwait(false);
+            foreach (var acc in accounts)
+            {
+                await application.RemoveAsync(acc).ConfigureAwait(false);
+            }
         }
 
         static async Task<int> Main(string[] args)
@@ -117,11 +101,25 @@ namespace Solipsist.CLI
                 .SetBasePath(System.IO.Directory.GetCurrentDirectory())
                 .AddJsonFile("appsettings.json");
 
-            #region user_auth
-            var credential = new DefaultAzureCredential(includeInteractiveCredentials: true);
+            configuration = builder.Build();
 
-            string ownerID = await GetCurrentUserIdentityAsync(logger, credential);
+            // Loading PublicClientApplicationOptions from the values set on appsettings.json
+            appConfiguration = configuration
+                .Get<PublicClientApplicationOptions>();
+
+            #region user_auth
+            string resourceId = "https://solipsiststudios.onmicrosoft.com/experience-catalog";
+            string[] scopes = new string[]
+            {
+                $"{resourceId}/experiences.read",
+                $"{resourceId}/experiences.write"
+            };
+
+            var jsonToken = await SignInUserAndGetTokenUsingMSALAsync(scopes);
+            string ownerID = Utilities.GetUserIdentityFromToken(logger, jsonToken);
             logger.LogInformation("Authenticated as user: {0}", ownerID);
+
+            var credential = new DefaultAzureCredential(includeInteractiveCredentials: true);
             #endregion
 
             #region options
@@ -157,6 +155,14 @@ namespace Solipsist.CLI
             #endregion
 
             var rootCommand = new RootCommand("Solipsist Experience Platform CLI");
+
+            var logoutCommand = new Command("logout", "Log out of current session");
+            rootCommand.AddCommand(logoutCommand);
+            logoutCommand.SetHandler(async () =>
+            {
+                await LogoutAndClearCacheAsync();
+            });
+
             var catCommand = new Command("cat", "Commands relating to management of the Experience Catalog");
             rootCommand.AddCommand(catCommand);
 
@@ -172,7 +178,11 @@ namespace Solipsist.CLI
             {
                 var fileStream = file != null ? file.OpenRead() : null;
                 var result = await AddExperience.RunLocal(logger, credential, name, ownerID, fileStream);
-                logger.LogInformation(result.ToString());
+                if (result != null && result is CreatedResult)
+                {
+                    logger.LogInformation("Successfully created experience with ID {0}", ((CreatedResult)result).Location);
+                }
+                
             },
             nameOption, fileOption);
             #endregion
@@ -183,17 +193,16 @@ namespace Solipsist.CLI
 
             listCommand.SetHandler(async (owner) =>
             {
-                OkObjectResult? result = await ListExperiences.RunLocal(logger, credential, ownerID) as OkObjectResult;
-                if (result != null)
+                var result = await ListExperiences.RunLocal(logger, credential, ownerID);
+                if (result != null && result is OkObjectResult)
                 {
-                    JsonResult? experiences = result.Value as JsonResult;
+                    JsonResult? experiences = ((OkObjectResult)result).Value as JsonResult;
                     if (experiences != null)
                     {
                         string output = JsonConvert.SerializeObject(experiences.Value);
                         logger.LogInformation(output);
                     }
                 }
-
             });
             #endregion
 
@@ -210,7 +219,23 @@ namespace Solipsist.CLI
             launchCommand.SetHandler(async (expID, adminUsername, adminPassword, location) =>
             {
                 var result = await LaunchExperience.RunLocal(logger, credential, location, expID, adminUsername, adminPassword);
-                logger.LogInformation(result.ToString());
+                if (result == null)
+                {
+                    logger.LogCritical("LaunchExperience failed with no error message!");
+                }
+                else if (result is OkObjectResult)
+                {
+                    JsonResult? vmInfo = ((OkObjectResult)result).Value as JsonResult;
+                    if (vmInfo != null)
+                    {
+                        string output = JsonConvert.SerializeObject(vmInfo.Value);
+                        logger.LogInformation(output);
+                    }
+                }
+                else
+                {
+                    logger.LogError(result.ToString());
+                }
             },
             experienceOption, adminUsernameOption, adminPasswordOption, locationOption);
             #endregion

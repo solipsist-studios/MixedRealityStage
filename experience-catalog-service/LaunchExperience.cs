@@ -3,37 +3,24 @@ using Azure.Core;
 using Azure.Identity;
 using Azure.ResourceManager;
 using Azure.ResourceManager.Compute;
-using Azure.ResourceManager.Compute.Models;
-using Azure.ResourceManager.EventGrid;
-//using Azure.ResourceManager.EventGrid.Models;
-using Azure.ResourceManager.Network;
-using Azure.ResourceManager.Network.Models;
 using Azure.ResourceManager.Resources;
 using Azure.ResourceManager.Resources.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-//using Microsoft.AspNetCore.Mvc.Formatters.Internal;
 using Microsoft.Azure.Cosmos;
-//using Microsoft.Azure.Management.EventGrid;
-//using Microsoft.Azure.Management.EventGrid.Models;
-using Microsoft.Azure.Management.Network.Models;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.Http;
 using Microsoft.Extensions.Logging;
-using Microsoft.Rest;
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.IO;
-using System.Threading;
+using System.Linq;
 using System.Threading.Tasks;
-using System.Security.Claims;
 
 namespace Solipsist.ExperienceCatalog
 {
     public static class LaunchExperience
     {
-        //static readonly string tenantId = "d5f06f52-0502-420b-8324-b77ca4aa68dd";
+        private static Microsoft.Azure.Cosmos.Container metadataContainer;
 
         [FunctionName("LaunchExperience")]
         public static async Task<IActionResult> Run(
@@ -56,24 +43,7 @@ namespace Solipsist.ExperienceCatalog
             return await RunLocal(log, credential, azLocation, expID, adminUsername, adminPassword);
         }
 
-        private static async Task<string> GetExperienceOwner(ILogger log, Microsoft.Azure.Cosmos.Container metadataContainer, string expID)
-        {
-            QueryDefinition queryDefinition = new QueryDefinition(
-                "select * from metadata m where m.id = @expID")
-                .WithParameter("@expID", expID);
-
-            var resultSet = metadataContainer.GetItemQueryIterator<ExperienceMetadata>(queryDefinition).ToAsyncEnumerable();
-            ExperienceMetadata experience = await resultSet.FirstAsync();
-            if (experience == null)
-            {
-                log.LogError("!!!!!!!!ERROR: No experience found with ID {0}!!!!!!!!", expID);
-                return "";
-            }
-
-            return experience.ownerID;
-        }
-
-        private static async Task<IActionResult> SetExperienceCatalogState(ILogger log, Microsoft.Azure.Cosmos.Container metadataContainer, string expID, ExperienceState state)
+        private static async Task<IActionResult> SetExperienceCatalogStateAsync(ILogger log, string expID, ExperienceState state)
         {
             QueryDefinition queryDefinition = new QueryDefinition(
                 "select * from metadata m where m.id = @expID")
@@ -109,9 +79,9 @@ namespace Solipsist.ExperienceCatalog
             log.LogInformation("--------Start fetching storage clients--------");
             // Connect to metadata db and query the experience metadata container
             using CosmosClient cosmosClient = new CosmosClient((await Utilities.GetKeyVaultSecretAsync("CosmosDBConnectionString", credential)).Value);
-            var metadataContainer = cosmosClient.GetContainer("experiences", "metadata");
+            metadataContainer = cosmosClient.GetContainer("experiences", "metadata");
 
-            IActionResult experienceResult = await SetExperienceCatalogState(log, metadataContainer, expID, ExperienceState.Starting);
+            IActionResult experienceResult = await SetExperienceCatalogStateAsync(log, expID, ExperienceState.Starting);
             ExperienceMetadata experience = null;
             if (experienceResult is ObjectResult)
             {
@@ -155,16 +125,16 @@ namespace Solipsist.ExperienceCatalog
 
             log.LogInformation("--------End fetching Virtual Machine--------");
 
-            foreach (var nicConfig in vmResource.Data.NetworkProfile.NetworkInterfaceConfigurations)
-            {
-                if (nicConfig.Primary ?? false)
-                {
-                    foreach (var ip in nicConfig.IPConfigurations)
-                    {
-                        log.LogInformation("VM IP Config: {0}", ip.PublicIPAddressConfiguration.ToString());
-                    }
-                }
-            }
+            //foreach (var nicConfig in vmResource.Data.NetworkProfile.NetworkInterfaceConfigurations)
+            //{
+            //    if (nicConfig.Primary ?? false)
+            //    {
+            //        foreach (var ip in nicConfig.IPConfigurations)
+            //        {
+            //            log.LogInformation("VM IP Config: {0}", ip.PublicIPAddressConfiguration.ToString());
+            //        }
+            //    }
+            //}
 
             log.LogInformation("--------Start fetching Virtual Machine--------");
 

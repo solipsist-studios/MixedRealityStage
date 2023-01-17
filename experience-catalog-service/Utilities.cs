@@ -1,23 +1,16 @@
 ﻿using Azure.Core;
 using Azure.Identity;
 using Azure.Security.KeyVault.Secrets;
-using Microsoft.Azure.Management.Network.Models;
-using Microsoft.Azure.Services.AppAuthentication;
 using Microsoft.Extensions.Logging;
-using Microsoft.Identity.Client;
-//using Microsoft.IdentityModel.Clients.ActiveDirectory;
 using System;
 using System.Configuration;
 using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
-using System.Security.Policy;
 using System.Threading.Tasks;
-using static System.Net.Mime.MediaTypeNames;
-using static System.Net.WebRequestMethods;
 
 namespace Solipsist.ExperienceCatalog
 {
-    internal class Utilities
+    public class Utilities
     {
         // TODO: Make this work for both local settings and Key Storage
         // TODO2: Replace this with Identity based auth
@@ -32,25 +25,39 @@ namespace Solipsist.ExperienceCatalog
             return conStr;
         }
 
-        public static async Task<string> GetCurrentUserIdentityAsync(ILogger log, TokenCredential credential)
+        public static JwtSecurityToken GetJwtFromString(string token)
         {
-            string resourceId = "https://solipsiststudios.onmicrosoft.com/experience-catalog";
-            //string[] scopes = new string[] { $"{resourceId}/.default" };
-            string[] scopes = new string[]
-            {
-                $"{resourceId}/experiences.read",
-                $"{resourceId}/experiences.write"
-            };
-
-            string token = "";
-
             var handler = new JwtSecurityTokenHandler();
             var jsonToken = handler.ReadToken(token) as JwtSecurityToken;
+            return jsonToken;
+        }
 
-            log.LogInformation("Full Token:\n{0}", jsonToken != null ? jsonToken.ToString() : "NOT FOUND");
+        public static JwtSecurityToken GetTokenFromConfidentialClient(ILogger log, TokenCredential credential, string[] scopes )
+        {
+            string token = "";
+            try
+            {
+                token = credential.GetToken(new Azure.Core.TokenRequestContext(scopes), new System.Threading.CancellationToken()).Token;
+            }
+            catch (AuthenticationFailedException ex)
+            {
+                // Try getting the token from the header directly.
+            }
 
+            var jsonToken = GetJwtFromString(token);
+
+#if DEBUG
+            // Only print this info in debug mode!!
+            log.LogDebug("Full Token:\n{0}", jsonToken != null ? jsonToken.ToString() : "NOT FOUND");
+#endif
+
+            return jsonToken;
+        }
+
+        public static string GetUserIdentityFromToken(ILogger log, JwtSecurityToken jsonToken)
+        {
             // TODO: Validate "aud" claim matches client ID
-            return jsonToken.Claims.First(c => c.Type == "oid").Value;
+            return jsonToken == null ? "" : jsonToken.Claims.First(c => c.Type == "oid").Value;
         }
 
         public static async Task<KeyVaultSecret> GetKeyVaultSecretAsync(string secretName, TokenCredential credential)

@@ -9,7 +9,6 @@ using Microsoft.Azure.WebJobs.Extensions.Http;
 using Microsoft.Extensions.Logging;
 using System;
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Security.Claims;
 using System.Threading.Tasks;
 
@@ -34,6 +33,13 @@ namespace Solipsist.ExperienceCatalog
                 log.LogError("Could not find user principal");
             }
 
+            string resourceId = "https://solipsiststudios.onmicrosoft.com/experience-catalog";
+            string[] scopes = new string[]
+            {
+                $"{resourceId}/experiences.read",
+                $"{resourceId}/experiences.write"
+            };
+
             // Try getting parameters from query string
             // TODO: make this more robust
             string experienceName = req.Query["name"];
@@ -49,10 +55,11 @@ namespace Solipsist.ExperienceCatalog
             // Connect to metadata db and query the experience metadata container
             var credential = new DefaultAzureCredential(includeInteractiveCredentials: true);
 
-            string ownerID = await Utilities.GetCurrentUserIdentityAsync(log, credential);
+            var jsonToken = Utilities.GetTokenFromConfidentialClient(log, credential, scopes);
+            string ownerID = Utilities.GetUserIdentityFromToken(log, jsonToken);
 
             // Upload blob
-            Stream myBlob = new MemoryStream();
+            Stream myBlob;
             var file = req.Form.Files["payload"];
             string fileExt = Path.GetExtension(file.FileName);
             myBlob = file.OpenReadStream();
@@ -67,8 +74,6 @@ namespace Solipsist.ExperienceCatalog
             string experienceID = System.Guid.NewGuid().ToString();
 
             string[] scopes = new string[] { "https://graph.microsoft.com/.default" };
-            //credential.GetToken(new Azure.Core.TokenRequestContext(scopes));
-            
 
             // Set container to OwnerID
             BlobServiceClient storageClient = new BlobServiceClient((await Utilities.GetKeyVaultSecretAsync("StorageConnectionString", credential)).Value);

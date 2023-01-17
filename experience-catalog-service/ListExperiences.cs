@@ -3,14 +3,10 @@ using Azure.Identity;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Cosmos;
-using Microsoft.Azure.Management.Network.Models;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.Http;
 using Microsoft.Extensions.Logging;
-using System;
-using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
-using System.Security.Claims;
 using System.Threading.Tasks;
 
 namespace Solipsist.ExperienceCatalog
@@ -26,31 +22,13 @@ namespace Solipsist.ExperienceCatalog
             var credential = new DefaultAzureCredential(includeInteractiveCredentials: true);
 
             string resourceId = "https://solipsiststudios.onmicrosoft.com/experience-catalog";
-
-            //string[] scopes = new string[] { $"{resourceId}/.default" };
             string[] scopes = new string[]
             {
-                $"{resourceId}/experiences.read",
-                $"{resourceId}/experiences.write"
+                $"{resourceId}/experiences.read"
             };
 
-            string token = "";
-            try
-            {
-                token = credential.GetToken(new Azure.Core.TokenRequestContext(scopes), new System.Threading.CancellationToken()).Token;
-            }
-            catch (AuthenticationFailedException ex)
-            {
-                // Try getting the token from the header directly.
-            }
-
-            var handler = new JwtSecurityTokenHandler();
-            var jsonToken = handler.ReadToken(token) as JwtSecurityToken;
-
-            log.LogInformation("Full Token:\n{0}", jsonToken != null ? jsonToken.ToString() : "NOT FOUND");
-
-            // TODO: Validate "aud" claim matches client ID
-            string ownerID = jsonToken.Claims.First(c => c.Type == "oid").Value;
+            var jsonToken = Utilities.GetTokenFromConfidentialClient(log, credential, scopes);
+            string ownerID = Utilities.GetUserIdentityFromToken(log, jsonToken);
 
             // Input parameters are obtained from the route
             log.LogInformation($"GetExperiences HTTP function triggered for user {ownerID}");
