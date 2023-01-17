@@ -49,10 +49,10 @@ namespace Solipsist.ExperienceCatalog
             // Connect to metadata db and query the experience metadata container
             var credential = new DefaultAzureCredential(includeInteractiveCredentials: true);
 
-            string ownerID = await Utilities.GetCurrentUserIdentityAsync(log, credential);
+            string ownerID = Utilities.GetCurrentUserIdentity(log);//, credential);
 
             // Upload blob
-            Stream myBlob = new MemoryStream();
+            Stream myBlob;
             var file = req.Form.Files["payload"];
             string fileExt = Path.GetExtension(file.FileName);
             myBlob = file.OpenReadStream();

@@ -155,16 +155,16 @@ namespace Solipsist.ExperienceCatalog
 
             log.LogInformation("--------End fetching Virtual Machine--------");
 
-            foreach (var nicConfig in vmResource.Data.NetworkProfile.NetworkInterfaceConfigurations)
-            {
-                if (nicConfig.Primary ?? false)
-                {
-                    foreach (var ip in nicConfig.IPConfigurations)
-                    {
-                        log.LogInformation("VM IP Config: {0}", ip.PublicIPAddressConfiguration.ToString());
-                    }
-                }
-            }
+            //foreach (var nicConfig in vmResource.Data.NetworkProfile.NetworkInterfaceConfigurations)
+            //{
+            //    if (nicConfig.Primary ?? false)
+            //    {
+            //        foreach (var ip in nicConfig.IPConfigurations)
+            //        {
+            //            log.LogInformation("VM IP Config: {0}", ip.PublicIPAddressConfiguration.ToString());
+            //        }
+            //    }
+            //}
 
             log.LogInformation("--------Start fetching Virtual Machine--------");
 

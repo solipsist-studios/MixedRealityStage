@@ -5,14 +5,6 @@
     <RootNamespace>Solipsist.ExperienceCatalog</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <None Remove="Templates\event-grid.json" />
-    <None Remove="Templates\test-template.bicep" />
-    <None Remove="Templates\vm-logic-template.json" />
-    <None Remove="Templates\vm-subscription.json" />
-    <None Remove="Templates\vm-template2.bicep" />
-    <None Remove="Templates\vm-template2.json" />
-  </ItemGroup>
-  <ItemGroup>
     <PackageReference Include="Azure.Bicep.CommandLine.win-x64" Version="0.13.1" />
     <PackageReference Include="Azure.Bicep.MSBuild" Version="0.13.1" />
     <PackageReference Include="Azure.ResourceManager.Compute" Version="1.0.1" />
@@ -35,9 +27,9 @@
     <PackageReference Include="System.Linq.Async" Version="6.0.1" />
   </ItemGroup>
   <ItemGroup>
-    <Bicep Include="Templates\storage-role-assignment.bicep" OutputFile="$(OutputPath)\Templates\%(FileName).json" />
-    <Bicep Include="Templates\vm-group-template.bicep" OutputFile="$(OutputPath)\Templates\%(FileName).json" />
-    <Bicep Include="Templates\vm-template.bicep" OutputFile="$(OutputPath)\Templates\%(FileName).json" />
+    <Bicep Include="Templates\storage-role-assignment.bicep"/>
+    <Bicep Include="Templates\vm-group-template.bicep"/>
+    <Bicep Include="Templates\vm-template.bicep"/>
   </ItemGroup>
   <ItemGroup>
     <None Update="host.json">
@@ -48,7 +40,7 @@
       <CopyToPublishDirectory>Never</CopyToPublishDirectory>
     </None>
   </ItemGroup>
-  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-    <Exec Command="xcopy /i /e /s /y /f $(TargetDir)Templates $(SolutionDir)Templates" />
-  </Target>
+    <Target Name="PostBuild" AfterTargets="PostBuildEvent">
+        <Exec Command="xcopy /i /e /s /y /f $(TargetDir)Templates $(SolutionDir)Templates" />
+    </Target>
 </Project>

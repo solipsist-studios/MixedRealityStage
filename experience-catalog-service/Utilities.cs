@@ -32,15 +32,15 @@ namespace Solipsist.ExperienceCatalog
             return conStr;
         }
 
-        public static async Task<string> GetCurrentUserIdentityAsync(ILogger log, TokenCredential credential)
+        public static string GetCurrentUserIdentity(ILogger log)//, TokenCredential credential)
         {
-            string resourceId = "https://solipsiststudios.onmicrosoft.com/experience-catalog";
-            //string[] scopes = new string[] { $"{resourceId}/.default" };
-            string[] scopes = new string[]
-            {
-                $"{resourceId}/experiences.read",
-                $"{resourceId}/experiences.write"
-            };
+            //string resourceId = "https://solipsiststudios.onmicrosoft.com/experience-catalog";
+            ////string[] scopes = new string[] { $"{resourceId}/.default" };
+            //string[] scopes = new string[]
+            //{
+            //    $"{resourceId}/experiences.read",
+            //    $"{resourceId}/experiences.write"
+            //};
 
             string token = "";
 
