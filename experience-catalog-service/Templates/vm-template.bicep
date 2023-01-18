@@ -206,8 +206,13 @@ resource virtualMachineBootstrapScript 'Microsoft.Compute/virtualMachines/extens
         'https://solipsistexperiencecatal.blob.core.windows.net/experiences/launch-unity.sh'
         'https://solipsistexperiencecatal.blob.core.windows.net/experiences/unity.service'
       ]
-      commandToExecute: './launch-unity.sh ${experienceId} ${experienceName}'
+      commandToExecute: './launch-unity.sh ${experienceId} ${adminUsername}'
       managedIdentity : {}
     }
   }
+}
+
+resource azureSpatialAnchorsAccount 'Microsoft.MixedReality/spatialAnchorsAccounts@2021-03-01-preview' = {
+  name: '${experienceName}-asa'
+  location: location
 }
