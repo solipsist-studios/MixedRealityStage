@@ -32,7 +32,7 @@ namespace Solipsist.ExperienceCatalog
             AzureLocation azLocation = new AzureLocation(location);
 
             // TODO: admin name and password should be required values
-            string adminUsername = string.IsNullOrEmpty(req.Query["adminusername"]) ? "jsipko" : req.Query["adminusername"];
+            string adminUsername = string.IsNullOrEmpty(req.Query["adminusername"]) ? "solipsistadmin" : req.Query["adminusername"];
             string adminPassword = string.IsNullOrEmpty(req.Query["adminpassword"]) ? "solipsist4ever!" : req.Query["adminpassword"];
 
             log.LogInformation($"LaunchExperience HTTP function triggered for id: {expID}");
@@ -43,25 +43,31 @@ namespace Solipsist.ExperienceCatalog
             return await RunLocal(log, credential, azLocation, expID, adminUsername, adminPassword);
         }
 
-        private static async Task<IActionResult> SetExperienceCatalogStateAsync(ILogger log, string expID, ExperienceState state)
+        private static async Task<ExperienceMetadata> GetExperienceCatalogStateAsync(ILogger log, string expID)
         {
             QueryDefinition queryDefinition = new QueryDefinition(
                 "select * from metadata m where m.id = @expID")
                 .WithParameter("@expID", expID);
+
             var resultSet = metadataContainer.GetItemQueryIterator<ExperienceMetadata>(queryDefinition).ToAsyncEnumerable();
             ExperienceMetadata experience = await resultSet.FirstAsync();
-            if (experience == null) 
+            if (experience == null)
             {
                 log.LogError("!!!!!!!!ERROR: No experience found with ID {0}!!!!!!!!", expID);
-                return new NotFoundResult();
             }
 
-            if (experience.state != ExperienceState.Stopped)
-            {
-                log.LogWarning("Experience {0} could not be started from state {1}", expID, experience.state);
-                return new UnprocessableEntityResult();
-            }
+            return experience;
+        }
 
+        private static async Task<IActionResult> SetExperienceCatalogStateAsync(ILogger log, string expID, ExperienceState state)
+        {
+            var experience = await GetExperienceCatalogStateAsync(log, expID);
+
+            if (experience == null) 
+            { 
+                return new UnprocessableEntityResult(); 
+            }
+            
             experience.state = state;
             var response = await metadataContainer.UpsertItemAsync(experience);
             return response.StatusCode == System.Net.HttpStatusCode.OK ? new OkObjectResult(experience) : new UnprocessableEntityObjectResult(experience);
@@ -157,27 +163,32 @@ namespace Solipsist.ExperienceCatalog
                 Template = BinaryData.FromString(templateContent),
                 Parameters = BinaryData.FromObjectAsJson(new
                 {
-                    ownerId = new
-                    {
-                        value = ownerID
-                    },
-                    experienceId = new
-                    {
-                        value = expID
-                    },
-                    experienceName = new
-                    {
-                        value = vmName
-                    },
-                    location = new
-                    {
-                        value = location.ToString()
-                    }
+                    ownerId = new { value = ownerID },
+                    experienceId = new { value = expID },
+                    experienceName = new { value = vmName },
+                    location = new { value = location.ToString() },
+                    adminUsername = new { value = adminUsername },
+                    adminPassword = new { value = adminPassword }
                 })
             });
 
             var deploymentJob = await resourceGroup.GetArmDeployments().CreateOrUpdateAsync(WaitUntil.Completed, "vm-resource-deployment", deploymentContent);
-            return deploymentJob.Value;
+            ArmDeploymentResource resource = null;
+            ExperienceState newState = ExperienceState.Starting;
+
+            if (deploymentJob == null || deploymentJob.Value == null)
+            {
+                log.LogError(String.Format("Failed deployment {0}", deploymentJob.Id));
+                newState = ExperienceState.Stopped;
+            }
+            else
+            {
+                resource = deploymentJob.Value;
+                newState = ExperienceState.Running;
+            }
+
+            await SetExperienceCatalogStateAsync(log, expID, newState);
+            return resource;
         }
     }
 }
