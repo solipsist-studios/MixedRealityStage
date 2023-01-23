@@ -11,6 +11,7 @@ using Microsoft.Azure.Cosmos;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.Http;
 using Microsoft.Extensions.Logging;
+using Solipsist.Common;
 using System;
 using System.IO;
 using System.Linq;

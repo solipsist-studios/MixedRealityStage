@@ -3,28 +3,14 @@ using Azure.Identity;
 using Azure.Security.KeyVault.Secrets;
 using Microsoft.Extensions.Logging;
 using System;
-using System.Configuration;
 using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace Solipsist.ExperienceCatalog
+namespace Solipsist.Common
 {
     public class Utilities
     {
-        // TODO: Make this work for both local settings and Key Storage
-        // TODO2: Replace this with Identity based auth
-        public static string GetBlobStorageConnectionString(string name)
-        {
-            ConnectionStringSettings conStrSetting = ConfigurationManager.ConnectionStrings[$"ConnectionStrings:{name}"];
-            string conStr = conStrSetting != null ?
-                conStrSetting.ConnectionString :
-                // Azure Functions App Service naming convention
-                Environment.GetEnvironmentVariable($"BlobStorageConnectionString");
-
-            return conStr;
-        }
-
         public static JwtSecurityToken GetJwtFromString(string token)
         {
             var handler = new JwtSecurityTokenHandler();
@@ -32,7 +18,7 @@ namespace Solipsist.ExperienceCatalog
             return jsonToken;
         }
 
-        public static JwtSecurityToken GetTokenFromConfidentialClient(ILogger log, TokenCredential credential, string[] scopes )
+        public static JwtSecurityToken GetTokenFromConfidentialClient(ILogger log, TokenCredential credential, string[] scopes)
         {
             string token = "";
             try
@@ -69,11 +55,6 @@ namespace Solipsist.ExperienceCatalog
             var secretResponse = await client.GetSecretAsync(secretName);
 
             return secretResponse.Value;
-        }
-
-        public static async Task GetOrCreateResource()
-        {
-
         }
     }
 }

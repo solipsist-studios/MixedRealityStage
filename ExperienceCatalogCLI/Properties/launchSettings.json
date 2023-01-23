@@ -2,7 +2,7 @@
   "profiles": {
     "ExperienceCatalogCLI": {
       "commandName": "Project",
-      "commandLineArgs": "cat list"
+      "commandLineArgs": "cat launch --experience-id 81cd59dd-678c-49a7-9259-0e696b0289b2"
     }
   }
 }

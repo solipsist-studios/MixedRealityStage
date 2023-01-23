@@ -1,6 +1,4 @@
 using Microsoft.Azure.Cosmos;
-using System;
-using System.Collections.Generic;
 
 public static class CosmosDbExtensions
 {
@@ -11,6 +9,23 @@ public static class CosmosDbExtensions
     /// <param name="setIterator"></param>
     /// <returns></returns>
     public static async IAsyncEnumerable<TModel> ToAsyncEnumerable<TModel>(this FeedIterator<TModel> setIterator)
+    {
+        while (setIterator.HasMoreResults)
+        {
+            foreach (var item in await setIterator.ReadNextAsync())
+            {
+                yield return item;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Convert a feed iterator to a List
+    /// </summary>
+    /// <typeparam name="TModel"></typeparam>
+    /// <param name="setIterator"></param>
+    /// <returns></returns>
+    public static List<TModel> ToList<TModel>(this FeedIterator<TModel> setIterator)
     {
         while (setIterator.HasMoreResults)
         {

@@ -3,6 +3,7 @@
     <TargetFramework>net6.0</TargetFramework>
     <AzureFunctionsVersion>v4</AzureFunctionsVersion>
     <RootNamespace>Solipsist.ExperienceCatalog</RootNamespace>
+    <RunPostBuildEvent>OnOutputUpdated</RunPostBuildEvent>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Azure.Bicep.CommandLine.win-x64" Version="0.13.1" />
@@ -23,13 +24,15 @@
     <PackageReference Include="Microsoft.Identity.Web" Version="2.0.8-preview" />
     <PackageReference Include="Microsoft.NET.Sdk.Functions" Version="4.1.3" />
     <PackageReference Include="Microsoft.Rest.ClientRuntime" Version="2.3.24" />
-    <PackageReference Include="System.Configuration.ConfigurationManager" Version="7.0.0" />
     <PackageReference Include="System.Linq.Async" Version="6.0.1" />
   </ItemGroup>
   <ItemGroup>
-    <Bicep Include="Templates\storage-role-assignment.bicep" OutputFile="$(TargetDir)Templates\%(FileName).json"/>
-    <Bicep Include="Templates\vm-group-template.bicep" OutputFile="$(TargetDir)Templates\%(FileName).json"/>
-    <Bicep Include="Templates\vm-template.bicep" OutputFile="$(TargetDir)Templates\%(FileName).json"/>
+    <Bicep Include="Templates\storage-role-assignment.bicep" OutputFile="$(TargetDir)Templates\%(FileName).json" />
+    <Bicep Include="Templates\vm-group-template.bicep" OutputFile="$(TargetDir)Templates\%(FileName).json" />
+    <Bicep Include="Templates\vm-template.bicep" OutputFile="$(TargetDir)Templates\%(FileName).json" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Common\Common.csproj" />
   </ItemGroup>
   <ItemGroup>
     <None Update="host.json">
