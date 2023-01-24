@@ -1,18 +1,15 @@
 ﻿using Azure.Core;
+using Azure.Identity;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Routing;
 using Microsoft.Azure.Cosmos;
-using Microsoft.Azure.WebJobs.Extensions.Http;
 using Microsoft.Azure.WebJobs;
+using Microsoft.Azure.WebJobs.Extensions.Http;
 using Microsoft.Extensions.Logging;
-using System;
+using Solipsist.Common;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
-using Azure.Identity;
-using Solipsist.Common;
 
 namespace Solipsist.ExperienceControl
 {
@@ -20,7 +17,7 @@ namespace Solipsist.ExperienceControl
     {
         [FunctionName("GetAnchorIds")]
         public static async Task<IActionResult> Run(
-            [HttpTrigger(AuthorizationLevel.Function, "get", "post", Route = "{expid}/getanchors")] HttpRequest req,
+            [HttpTrigger(AuthorizationLevel.User, "get", Route = "{expid}/getanchors")] HttpRequest req,
             string expid,
             ILogger log)
         {
@@ -48,9 +45,9 @@ namespace Solipsist.ExperienceControl
             try
             {
                 QueryDefinition queryDefinition = new QueryDefinition("select * from c");
-                var resultSet = anchorContainer.GetItemQueryIterator<string>(queryDefinition);
+                var resultSet = anchorContainer.GetItemQueryIterator<AnchorModel>(queryDefinition);
 
-                List<string> anchorIds = await resultSet.ToAsyncEnumerable().ToListAsync();
+                List<string> anchorIds = await resultSet.ToAsyncEnumerable((AnchorModel a) => { return a.id.ToString(); }).ToListAsync();
 
                 log.LogInformation("Finished parsing spatial anchors");
                 return anchorIds;

@@ -8,6 +8,8 @@ using Microsoft.Extensions.Logging;
 using Solipsist.Common;
 using System.Threading.Tasks;
 using Microsoft.Azure.Cosmos;
+using System.IO;
+using System.Text;
 
 namespace Solipsist.ExperienceControl
 {
@@ -15,13 +17,17 @@ namespace Solipsist.ExperienceControl
     {
         [FunctionName("AddAnchor")]
         public static async Task<IActionResult> Run(
-            [HttpTrigger(AuthorizationLevel.Function, "get", "post", Route = "{expid}/addanchor")] HttpRequest req,
+            [HttpTrigger(AuthorizationLevel.User, "post", Route = "{expid}/addanchor")] HttpRequest req,
             string expid,
             ILogger log)
         {
             log.LogInformation("C# HTTP trigger function processed a request.");
 
-            string anchorId = req.Query["id"];
+            string anchorId;
+            using (StreamReader reader = new StreamReader(req.Body, Encoding.UTF8))
+            {
+                anchorId = await reader.ReadToEndAsync();
+            }
 
             if (string.IsNullOrWhiteSpace(anchorId)) 
             {
@@ -52,10 +58,16 @@ namespace Solipsist.ExperienceControl
             var response = await client.GetContainer("experiences", expId).CreateItemAsync(
                 new
                 {
-                    anchorId
+                    id = anchorId
                 });
 
-            return response.StatusCode == System.Net.HttpStatusCode.OK ? new OkResult() : new UnprocessableEntityResult();
+            if (response.StatusCode != System.Net.HttpStatusCode.Created)
+            {
+                log.LogError("Failed to add anchor.  Status code:\n{0}", response.StatusCode);
+            }
+
+            string responseMessage = $"Successfully added the anchor: {anchorId}";
+            return response.StatusCode == System.Net.HttpStatusCode.Created ? new CreatedResult(anchorId, responseMessage) : new BadRequestResult();
         }
     }
 }
