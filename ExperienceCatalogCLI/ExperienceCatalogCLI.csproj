@@ -20,6 +20,7 @@
     </ItemGroup>
 
     <ItemGroup>
+        <ProjectReference Include="..\Common\Common.csproj" />
         <ProjectReference Include="..\experience-catalog-service\experience-catalog.csproj" />
     </ItemGroup>
 
