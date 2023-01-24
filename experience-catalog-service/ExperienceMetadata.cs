@@ -14,13 +14,6 @@ namespace Solipsist.ExperienceCatalog
 
     public class ExperienceMetadata
     {
-        public ExperienceMetadata(string ownerID, string name)
-        {
-            this.ownerID = ownerID;
-            this.name = name;
-            this.state = ExperienceState.Stopped;
-        }
-
         [Key]
         [JsonPropertyName("id")]
         public Guid? id { get; set; }

@@ -267,3 +267,6 @@ __pycache__/
 # VS Code files
 *.code-workspace
 .vscode/
+*.pubxml
+/experience-catalog-service/Properties/serviceDependencies.solipsist-experience-catalog - Zip Deploy.json
+/experience-catalog-service/Properties/ServiceDependencies/solipsist-experience-catalog - Zip Deploy/storage1.arm.json

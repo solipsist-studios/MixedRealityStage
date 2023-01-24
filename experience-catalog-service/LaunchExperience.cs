@@ -25,7 +25,7 @@ namespace Solipsist.ExperienceCatalog
 
         [FunctionName("LaunchExperience")]
         public static async Task<IActionResult> Run(
-            [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "expc/launch")] HttpRequest req,
+            [HttpTrigger(AuthorizationLevel.User, "post", Route = "expc/launch")] HttpRequest req,
             ILogger log)
         {
             string expID = req.Query["expid"];

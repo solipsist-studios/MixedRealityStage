@@ -1,3 +1,4 @@
+using Azure;
 using Azure.Core;
 using Azure.Identity;
 using Azure.Storage.Blobs;
@@ -20,7 +21,7 @@ namespace Solipsist.ExperienceCatalog
     {
         [FunctionName("AddExperience")]
         public static async Task<IActionResult> Run(
-            [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "expc/add")] HttpRequest req,
+            [HttpTrigger(AuthorizationLevel.User, "post", Route = "expc/add")] HttpRequest req,
             ILogger log)
         {
             log.LogInformation("AddExperience HTTP function triggered.");
@@ -56,8 +57,28 @@ namespace Solipsist.ExperienceCatalog
             // Connect to metadata db and query the experience metadata container
             var credential = new DefaultAzureCredential(includeInteractiveCredentials: true);
 
-            var jsonToken = Utilities.GetTokenFromConfidentialClient(log, credential, scopes);
-            string ownerID = Utilities.GetUserIdentityFromToken(log, jsonToken);
+            string ownerID = ""; ;
+            try
+            {
+                var jsonToken = Utilities.GetTokenFromConfidentialClient(log, credential, scopes);
+                ownerID = Utilities.GetUserIdentityFromToken(log, jsonToken);
+            }
+            catch (Exception ex)
+            {
+                log.LogError("Exception thrown in ListExperiences:");
+                log.LogError($"{ex.Message}");
+            }
+
+            if (string.IsNullOrWhiteSpace(ownerID))
+            {
+                ownerID = req.Query["ownerid"];
+            }
+
+            if (string.IsNullOrEmpty(ownerID))
+            {
+                log.LogError("Could not infer OwnerID.");
+                return new BadRequestResult();
+            }
 
             // Upload blob
             Stream myBlob;
@@ -94,7 +115,7 @@ namespace Solipsist.ExperienceCatalog
 
             // Connect to metadata db and add this experience
             using CosmosClient client = new CosmosClient((await Utilities.GetKeyVaultSecretAsync("CosmosDBConnectionString", credential)).Value);
-            await client.GetContainer("experiences", "metadata").CreateItemAsync(
+            var response = await client.GetContainer("experiences", "metadata").CreateItemAsync(
                 new
                 {
                     id = experienceID,
@@ -102,9 +123,13 @@ namespace Solipsist.ExperienceCatalog
                     name = experienceName,
                 });
 
-            string responseMessage = $"Successfully created the experience: {experienceName}";
+            if (response.StatusCode != System.Net.HttpStatusCode.Created)
+            {
+                log.LogError("Failed to create experience.  Status code:\n{0}", response.StatusCode);
+            }
 
-            return new CreatedResult(experienceID, responseMessage);
+            string responseMessage = $"Successfully created the experience: {experienceName}";
+            return response.StatusCode == System.Net.HttpStatusCode.Created ? new CreatedResult(experienceID, responseMessage) : new BadRequestResult();
         }
     }
 }

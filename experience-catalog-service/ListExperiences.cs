@@ -7,7 +7,9 @@ using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.Http;
 using Microsoft.Extensions.Logging;
 using Solipsist.Common;
+using System;
 using System.Linq;
+using System.Security.Claims;
 using System.Threading.Tasks;
 
 namespace Solipsist.ExperienceCatalog
@@ -16,7 +18,7 @@ namespace Solipsist.ExperienceCatalog
     {
         [FunctionName("ListExperiences")]
         public static async Task<IActionResult> Run(
-            [HttpTrigger(AuthorizationLevel.Anonymous, "list", Route = "expc/list")] HttpRequest req,
+            [HttpTrigger(AuthorizationLevel.User, "get", Route = "expc/list")] HttpRequest req,
             ILogger log)
         {
             // Connect to metadata db and query the experience metadata container
@@ -28,11 +30,31 @@ namespace Solipsist.ExperienceCatalog
                 $"{resourceId}/experiences.read"
             };
 
-            var jsonToken = Utilities.GetTokenFromConfidentialClient(log, credential, scopes);
-            string ownerID = Utilities.GetUserIdentityFromToken(log, jsonToken);
+            string ownerID = ""; ;
+            try
+            {
+                var jsonToken = Utilities.GetTokenFromConfidentialClient(log, credential, scopes);
+                ownerID = Utilities.GetUserIdentityFromToken(log, jsonToken);
+            }
+            catch (Exception ex)
+            {
+                log.LogError("Exception thrown in ListExperiences:");
+                log.LogError($"{ex.Message}");
+            }
+
+            if (string.IsNullOrWhiteSpace(ownerID))
+            {
+                ownerID = req.Query["ownerid"];
+            }
+
+            if (string.IsNullOrEmpty(ownerID))
+            {
+                log.LogError("Could not infer OwnerID.");
+                return new BadRequestResult();
+            }
 
             // Input parameters are obtained from the route
-            log.LogInformation($"GetExperiences HTTP function triggered for user {ownerID}");
+            log.LogInformation($"ListExperiences HTTP function triggered for user {ClaimsPrincipal.Current.Identity.Name}");
 
             return await RunLocal(log, credential, ownerID);
         }
@@ -40,6 +62,7 @@ namespace Solipsist.ExperienceCatalog
         public static async Task<IActionResult> RunLocal(ILogger log, TokenCredential credential, string ownerID)
         {
             using CosmosClient client = new CosmosClient((await Utilities.GetKeyVaultSecretAsync("CosmosDBConnectionString", credential)).Value);
+
             var container = client.GetContainer("experiences", "metadata");
 
             QueryDefinition queryDefinition = new QueryDefinition(
