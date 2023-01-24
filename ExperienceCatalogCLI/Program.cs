@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Identity.Client;
 using Microsoft.Identity.Client.Extensions.Msal;
 using Newtonsoft.Json;
+using Solipsist.Common;
 using Solipsist.ExperienceCatalog;
 using System.CommandLine;
 using System.IdentityModel.Tokens.Jwt;

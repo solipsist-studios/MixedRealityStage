@@ -20,7 +20,7 @@ namespace Solipsist.ExperienceControl
     {
         [FunctionName("GetAnchorIds")]
         public static async Task<IActionResult> Run(
-            [HttpTrigger(AuthorizationLevel.Function, "get", "post", Route = "{expid}/addanchor")] HttpRequest req,
+            [HttpTrigger(AuthorizationLevel.Function, "get", "post", Route = "{expid}/getanchors")] HttpRequest req,
             string expid,
             ILogger log)
         {
@@ -36,8 +36,11 @@ namespace Solipsist.ExperienceControl
 
             using CosmosClient cosmosClient = new CosmosClient((await Utilities.GetKeyVaultSecretAsync("CosmosDBConnectionString", credential)).Value);
             anchorContainer = cosmosClient.GetContainer("experiences", expID);
+            List<string> anchors = await GetAnchorIdsAsync(log, anchorContainer);
 
-            return new OkResult();
+            JsonResult anchorsResult = new JsonResult(anchors);
+
+            return new OkObjectResult(anchorsResult);
         }
 
         private static async Task<List<string>> GetAnchorIdsAsync(ILogger log, Container anchorContainer)
@@ -47,17 +50,7 @@ namespace Solipsist.ExperienceControl
                 QueryDefinition queryDefinition = new QueryDefinition("select * from c");
                 var resultSet = anchorContainer.GetItemQueryIterator<string>(queryDefinition);
 
-                // TODO: Implement FeedIterator extension for ToList()
-                List<string> anchorIds = new List<string>();
-                while (resultSet.HasMoreResults)
-                {
-                    try
-                    {
-                        var response = await resultSet.ReadNextAsync();
-                        anchorIds.AddRange(response.ToList());
-                    }
-                    catch (Exception ex) { log.LogError(ex.Message); }
-                }
+                List<string> anchorIds = await resultSet.ToAsyncEnumerable().ToListAsync();
 
                 log.LogInformation("Finished parsing spatial anchors");
                 return anchorIds;

@@ -263,3 +263,7 @@ paket-files/
 __pycache__/
 *.pyc
 /Templates
+
+# VS Code files
+*.code-workspace
+.vscode/
