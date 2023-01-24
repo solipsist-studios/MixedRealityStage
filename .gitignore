@@ -268,5 +268,5 @@ __pycache__/
 *.code-workspace
 .vscode/
 *.pubxml
-/experience-catalog-service/Properties/serviceDependencies.solipsist-experience-catalog - Zip Deploy.json
-/experience-catalog-service/Properties/ServiceDependencies/solipsist-experience-catalog - Zip Deploy/storage1.arm.json
+*Zip Deploy*
+*Zip Deploy/
