@@ -4,6 +4,7 @@
     <AzureFunctionsVersion>v4</AzureFunctionsVersion>
     <RootNamespace>Solipsist.ExperienceCatalog</RootNamespace>
     <RunPostBuildEvent>OnOutputUpdated</RunPostBuildEvent>
+    <_FunctionsSkipCleanOutput>true</_FunctionsSkipCleanOutput>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Azure.Bicep.CommandLine.win-x64" Version="0.13.1" />
