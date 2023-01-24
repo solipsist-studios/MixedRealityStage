@@ -17,7 +17,7 @@ namespace Solipsist.ExperienceControl
     {
         [FunctionName("GetAnchorIds")]
         public static async Task<IActionResult> Run(
-            [HttpTrigger(AuthorizationLevel.User, "get", Route = "{expid}/getanchors")] HttpRequest req,
+            [HttpTrigger(AuthorizationLevel.Function, "get", Route = "{expid}/getanchors")] HttpRequest req,
             string expid,
             ILogger log)
         {
@@ -33,30 +33,26 @@ namespace Solipsist.ExperienceControl
 
             using CosmosClient cosmosClient = new CosmosClient((await Utilities.GetKeyVaultSecretAsync("CosmosDBConnectionString", credential)).Value);
             anchorContainer = cosmosClient.GetContainer("experiences", expID);
-            List<string> anchors = await GetAnchorIdsAsync(log, anchorContainer);
 
-            JsonResult anchorsResult = new JsonResult(anchors);
-
-            return new OkObjectResult(anchorsResult);
-        }
-
-        private static async Task<List<string>> GetAnchorIdsAsync(ILogger log, Container anchorContainer)
-        {
+            List<string> anchors;
             try
             {
                 QueryDefinition queryDefinition = new QueryDefinition("select * from c");
                 var resultSet = anchorContainer.GetItemQueryIterator<AnchorModel>(queryDefinition);
 
-                List<string> anchorIds = await resultSet.ToAsyncEnumerable((AnchorModel a) => { return a.id.ToString(); }).ToListAsync();
+                anchors = await resultSet.ToAsyncEnumerable((AnchorModel a) => { return a.id.ToString(); }).ToListAsync();
 
                 log.LogInformation("Finished parsing spatial anchors");
-                return anchorIds;
             }
             catch (CosmosException cosmos_DB_ex)
             {
                 log.LogError(cosmos_DB_ex.Message);
-                return null;
+                return new BadRequestResult();
             }
+
+            JsonResult anchorsResult = new JsonResult(anchors);
+
+            return new OkObjectResult(anchorsResult);
         }
     }
 }

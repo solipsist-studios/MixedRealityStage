@@ -15,13 +15,14 @@ namespace Solipsist.ExperienceControl
 {
     public static class AddAnchor
     {
+        // TODO: Need on-device authentication to enable User-level here.
         [FunctionName("AddAnchor")]
         public static async Task<IActionResult> Run(
-            [HttpTrigger(AuthorizationLevel.User, "post", Route = "{expid}/addanchor")] HttpRequest req,
+            [HttpTrigger(AuthorizationLevel.Function, "post", Route = "{expid}/addanchor")] HttpRequest req,
             string expid,
             ILogger log)
         {
-            log.LogInformation("C# HTTP trigger function processed a request.");
+            log.LogInformation($"AddAnchor function triggered for {expid}");
 
             string anchorId;
             using (StreamReader reader = new StreamReader(req.Body, Encoding.UTF8))
@@ -43,31 +44,22 @@ namespace Solipsist.ExperienceControl
 
         public static async Task<IActionResult> RunLocal(ILogger log, TokenCredential credential, string expID, string anchorID)
         {
-            Microsoft.Azure.Cosmos.Container anchorContainer;
-
-            using CosmosClient cosmosClient = new CosmosClient((await Utilities.GetKeyVaultSecretAsync("CosmosDBConnectionString", credential)).Value);
-            anchorContainer = cosmosClient.GetContainer("experiences", expID);
-
-            return await AddAnchorAsync(log, credential, expID, anchorID);
-        }
-
-        private static async Task<IActionResult> AddAnchorAsync(ILogger log, TokenCredential credential, string expId, string anchorId)
-        {
             // Connect to metadata db and add this experience
             using CosmosClient client = new CosmosClient((await Utilities.GetKeyVaultSecretAsync("CosmosDBConnectionString", credential)).Value);
-            var response = await client.GetContainer("experiences", expId).CreateItemAsync(
+            var response = await client.GetContainer("experiences", expID).CreateItemAsync(
                 new
                 {
-                    id = anchorId
-                });
+                    id = anchorID
+                }, 
+                new PartitionKey(anchorID));
 
             if (response.StatusCode != System.Net.HttpStatusCode.Created)
             {
-                log.LogError("Failed to add anchor.  Status code:\n{0}", response.StatusCode);
+                log.LogError("Failed to add anchor.  Status code: {0}", response.StatusCode);
             }
 
-            string responseMessage = $"Successfully added the anchor: {anchorId}";
-            return response.StatusCode == System.Net.HttpStatusCode.Created ? new CreatedResult(anchorId, responseMessage) : new BadRequestResult();
+            string responseMessage = $"Successfully added the anchor: {anchorID}";
+            return response.StatusCode == System.Net.HttpStatusCode.Created ? new CreatedResult(anchorID, responseMessage) : new BadRequestResult();
         }
     }
 }
