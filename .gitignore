@@ -270,3 +270,4 @@ __pycache__/
 *.pubxml
 *Zip Deploy*
 *Zip Deploy/
+**/launchSettings.json
