@@ -29,9 +29,10 @@
     <PackageReference Include="System.Linq.Async" Version="6.0.1" />
   </ItemGroup>
   <ItemGroup>
-    <Bicep Include="Templates\storage-role-assignment.bicep" OutputFile="$(TargetDir)Templates\%(FileName).json" />
-    <Bicep Include="Templates\vm-group-template.bicep" OutputFile="$(TargetDir)Templates\%(FileName).json" />
-    <Bicep Include="Templates\vm-template.bicep" OutputFile="$(TargetDir)Templates\%(FileName).json" />
+    <Bicep Include="Templates\storage-role-assignment.bicep" OutputFile="..\Templates\%(FileName).json" />
+    <Bicep Include="Templates\vm-group-template.bicep" OutputFile="..\Templates\%(FileName).json" />
+    <Bicep Include="Templates\vm-template.bicep" OutputFile="..\Templates\%(FileName).json" />
+    <Bicep Include="Templates\db-container.bicep" OutputFile="..\Templates\%(FileName).json" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Common\Common.csproj" />

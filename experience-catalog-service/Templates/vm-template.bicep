@@ -11,6 +11,9 @@ param adminUsername string = 'solipsistadmin'
 param storageAccountName string = 'solipsistexperiencecatal'
 param storageResourceGroupName string = 'solipsistexperiencecatal'
 
+param databaseAccountName string = 'experience-catalog'
+param databaseName string = 'experiences'
+
 @secure()
 param adminPassword string = 'solipsist4ever!'
 
@@ -215,4 +218,14 @@ resource virtualMachineBootstrapScript 'Microsoft.Compute/virtualMachines/extens
 resource azureSpatialAnchorsAccount 'Microsoft.MixedReality/spatialAnchorsAccounts@2021-03-01-preview' = {
   name: '${experienceName}-asa'
   location: location
+}
+
+module anchorDbContainer './db-container.bicep' = {
+  name: 'anchorDbContainer'
+  scope: resourceGroup(storageResourceGroupName)
+  params: {
+    experienceId: experienceId
+    accountName: databaseAccountName
+    databaseName: databaseName
+  }
 }
