@@ -39,7 +39,7 @@ namespace Solipsist.ExperienceCatalog
             log.LogInformation($"LaunchExperience HTTP function triggered for id: {expID}");
 
             // Connect to metadata db and query the experience metadata container
-            var credential = new DefaultAzureCredential(includeInteractiveCredentials: true);
+            var credential = new DefaultAzureCredential(includeInteractiveCredentials: false);
 
             return await RunLocal(log, credential, azLocation, expID, adminUsername, adminPassword);
         }
