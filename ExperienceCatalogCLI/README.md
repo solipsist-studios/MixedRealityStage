@@ -1,6 +1,8 @@
 # ExperienceCatalogCLI
 Providing the command line interface for the Solipsist Stage platform.
 
+Download the latest from [Releases](https://github.com/solipsist-studios/MixedRealityStage/releases)
+
 ## Example
 ![Adding and launching an experience on the command line](./Assets/command-line.mp4)
 
