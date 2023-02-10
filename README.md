@@ -20,7 +20,7 @@ Self-hosting is always free!
 Coming Soon
 
 ### Integrate Unity Components
-See [stage-unity Readme](https://github.com/solipsist-studios/stage-unity/README.md).
+See [stage-unity Readme](https://github.com/solipsist-studios/stage-unity/blob/main/README.md).
 
 ### Create and Manage Experiences
 API Reference coming soon.
