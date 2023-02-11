@@ -12,7 +12,7 @@ Self-hosting is always free!
 * Unity >= 2020.3
 
 ## Example
-![Scene showing a mobile device and Hololens in a shared space](./Assets/0_Example.mp4)
+[Scene showing a mobile device and Hololens in a shared space](https://user-images.githubusercontent.com/19314267/218284316-ee86b8ab-3e4a-4d0f-9cda-b5242a66ea8a.webm)
 
 ## Getting Started
 
