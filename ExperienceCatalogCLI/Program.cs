@@ -217,7 +217,39 @@ namespace Solipsist.CLI
             };
             catCommand.AddCommand(launchCommand);
 
-            launchCommand.SetHandler(async (expID, adminUsername, adminPassword, location) =>
+            launchCommand.SetHandler(async (expID, file) =>
+            {
+                var result = await LaunchExperience.RunLocal(logger, credential, location, expID, adminUsername, adminPassword);
+                if (result == null)
+                {
+                    logger.LogCritical("LaunchExperience failed with no error message!");
+                }
+                else if (result is OkObjectResult)
+                {
+                    JsonResult? vmInfo = ((OkObjectResult)result).Value as JsonResult;
+                    if (vmInfo != null)
+                    {
+                        string output = JsonConvert.SerializeObject(vmInfo.Value);
+                        logger.LogInformation(output);
+                    }
+                }
+                else
+                {
+                    logger.LogError(result.ToString());
+                }
+            },
+            experienceOption, adminUsernameOption, adminPasswordOption, locationOption);
+            #endregion
+
+            #region update_command
+            var updateCommand = new Command("update", "Update the executable for an existing experience")
+            {
+                experienceOption,
+                fileOption
+            };
+            catCommand.AddCommand(updateCommand);
+
+            updateCommand.SetHandler(async (expID, adminUsername, adminPassword, location) =>
             {
                 var result = await LaunchExperience.RunLocal(logger, credential, location, expID, adminUsername, adminPassword);
                 if (result == null)
