@@ -30,6 +30,7 @@ namespace Solipsist.ExperienceCatalog
 
 
             // Run "Start unity" command
+            return new NotFoundResult();
         }
     }
 }

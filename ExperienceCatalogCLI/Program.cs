@@ -153,6 +153,11 @@ namespace Solipsist.CLI
                 name: "--location",
                 description: "The region in which to locate the resources",
                 getDefaultValue: () => "EastUS2");
+
+            var sizeOption = new Option<string?>(
+                name: "--size",
+                description: "The size of the VM to provision",
+                getDefaultValue: () => "Standard_B1ls");
             #endregion
 
             var rootCommand = new RootCommand("Solipsist Experience Platform CLI");
@@ -213,13 +218,14 @@ namespace Solipsist.CLI
                 experienceOption,
                 adminUsernameOption,
                 adminPasswordOption,
-                locationOption
+                locationOption,
+                sizeOption
             };
             catCommand.AddCommand(launchCommand);
 
-            launchCommand.SetHandler(async (expID, file) =>
+            launchCommand.SetHandler(async (expID, adminUsername, adminPassword, location, vmSize) =>
             {
-                var result = await LaunchExperience.RunLocal(logger, credential, location, expID, adminUsername, adminPassword);
+                var result = await LaunchExperience.RunLocal(logger, credential, location, expID, adminUsername, adminPassword, vmSize);
                 if (result == null)
                 {
                     logger.LogCritical("LaunchExperience failed with no error message!");
@@ -238,7 +244,7 @@ namespace Solipsist.CLI
                     logger.LogError(result.ToString());
                 }
             },
-            experienceOption, adminUsernameOption, adminPasswordOption, locationOption);
+            experienceOption, adminUsernameOption, adminPasswordOption, locationOption, sizeOption);
             #endregion
 
             #region update_command
@@ -249,9 +255,9 @@ namespace Solipsist.CLI
             };
             catCommand.AddCommand(updateCommand);
 
-            updateCommand.SetHandler(async (expID, adminUsername, adminPassword, location) =>
+            updateCommand.SetHandler(async (expID, adminUsername, adminPassword, location, vmSize) =>
             {
-                var result = await LaunchExperience.RunLocal(logger, credential, location, expID, adminUsername, adminPassword);
+                var result = await LaunchExperience.RunLocal(logger, credential, location, expID, adminUsername, adminPassword, vmSize);
                 if (result == null)
                 {
                     logger.LogCritical("LaunchExperience failed with no error message!");
@@ -270,7 +276,7 @@ namespace Solipsist.CLI
                     logger.LogError(result.ToString());
                 }
             },
-            experienceOption, adminUsernameOption, adminPasswordOption, locationOption);
+            experienceOption, adminUsernameOption, adminPasswordOption, locationOption, sizeOption);
             #endregion
 
             return await rootCommand.InvokeAsync(args);

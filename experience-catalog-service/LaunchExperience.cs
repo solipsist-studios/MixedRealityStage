@@ -36,12 +36,14 @@ namespace Solipsist.ExperienceCatalog
             string adminUsername = string.IsNullOrEmpty(req.Query["adminusername"]) ? "solipsistadmin" : req.Query["adminusername"];
             string adminPassword = string.IsNullOrEmpty(req.Query["adminpassword"]) ? "solipsist4ever!" : req.Query["adminpassword"];
 
+            string vmSize = string.IsNullOrEmpty(req.Query["size"]) ? "Standard_B1ls" : req.Query["size"];
+
             log.LogInformation($"LaunchExperience HTTP function triggered for id: {expID}");
 
             // Connect to metadata db and query the experience metadata container
             var credential = new DefaultAzureCredential(includeInteractiveCredentials: false);
 
-            return await RunLocal(log, credential, azLocation, expID, adminUsername, adminPassword);
+            return await RunLocal(log, credential, azLocation, expID, adminUsername, adminPassword, vmSize);
         }
 
         private static async Task<ExperienceMetadata> GetExperienceCatalogStateAsync(ILogger log, string expID)
@@ -76,7 +78,7 @@ namespace Solipsist.ExperienceCatalog
 
         // TODO: This function should be atomic
         // TODO 2: These functions are doing too much and should be refactored
-        public static async Task<IActionResult> RunLocal(ILogger log, TokenCredential credential, AzureLocation location, string expID, string adminUsername, string adminPassword)
+        public static async Task<IActionResult> RunLocal(ILogger log, TokenCredential credential, AzureLocation location, string expID, string adminUsername, string adminPassword, string vmSize)
         {
             // Authenticate
             log.LogInformation("--------Start creating ARM client with auth token--------");
@@ -117,7 +119,7 @@ namespace Solipsist.ExperienceCatalog
             ArmDeploymentResource deployment = null;
             if (!vmCollection.Exists(experience.name))
             {
-                deployment = await CreateVMWithBicep(log, credential, experience.ownerID, expID, resourceGroup, vmCollection, experience.name, location, adminUsername, adminPassword);
+                deployment = await CreateVMWithBicep(log, credential, experience.ownerID, expID, resourceGroup, vmCollection, experience.name, location, adminUsername, adminPassword, vmSize);
             }
 
             vmResource = await vmCollection.GetAsync(experience.name);
@@ -153,7 +155,7 @@ namespace Solipsist.ExperienceCatalog
             return new OkObjectResult(vmResult);
         }
 
-        private static async Task<ArmDeploymentResource> CreateVMWithBicep(ILogger log, TokenCredential credential, string ownerID, string expID, ResourceGroupResource resourceGroup, VirtualMachineCollection vmCollection, string vmName, AzureLocation location, string adminUsername, string adminPassword)
+        private static async Task<ArmDeploymentResource> CreateVMWithBicep(ILogger log, TokenCredential credential, string ownerID, string expID, ResourceGroupResource resourceGroup, VirtualMachineCollection vmCollection, string vmName, AzureLocation location, string adminUsername, string adminPassword, string vmSize)
         {
             log.LogInformation("Start Creating VM Resources");
             string templatePath = Path.Combine(".", "Templates", "vm-template.json");
@@ -169,7 +171,8 @@ namespace Solipsist.ExperienceCatalog
                     experienceName = new { value = vmName },
                     location = new { value = location.ToString() },
                     adminUsername = new { value = adminUsername },
-                    adminPassword = new { value = adminPassword }
+                    adminPassword = new { value = adminPassword },
+                    vmSize = new { value = vmSize }
                 })
             });
 
